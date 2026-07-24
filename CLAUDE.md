@@ -4,15 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-이 디렉토리(`K-water/ontology/`)는 **그린필드**다. 현재 존재하는 파일은 `PLAN.md`
-**하나뿐**이며, 아직 애플리케이션 코드·`docker-compose.yml`·의존성 매니페스트가 없다.
+**진행: M0~M3 완료** (2026-07-24 기준). 백엔드 파이프라인이 설문→draft→Claude 보강까지
+동작한다. **남은 것: M4**(Cypher/Neo4j 반영) · **M5**(프론트) · **M6**(통합). 마일스톤별
+상세·체크리스트는 `PLAN.md` §10과 "진행 현황" 섹션 참조.
 
-- **`PLAN.md`가 유일한 사양서(source of truth)다.** 작업 시작 전 반드시 통독할 것.
-  아키텍처, 디렉토리 구조, 중간표현 스키마, API 엔드포인트, 마일스톤이 모두 여기 있다.
-- 코드가 생기기 전까지, 아래 "명령"들은 **PLAN.md가 규정한 예정 명령**이며 실제로
-  실행 가능한 스크립트/파일은 아직 만들어지지 않았다.
-- GitHub 저장소 <https://github.com/2JUNSIK/ontology.git>에서 버전 관리한다.
+- **`PLAN.md`가 사양서(source of truth)다.** 작업 시작 전 통독할 것 — 아키텍처, 중간표현,
+  API 엔드포인트, 마일스톤이 모두 여기 있다.
+- **현재 존재하는 코드**(`app/backend/app/`): `models.py`, `seed_ontology.py`, `survey.py`,
+  `claude_enricher.py`, `config.py`, `main.py`, `routers/{survey,schema}.py`. 아직 없는 것:
+  `cypher_builder.py`, `neo4j_service.py`, `routers/graph.py`(M4), 프론트 소스(M5).
+- **아래 "명령"들은 이제 실제로 동작한다**(스캐폴드/의존성 존재). `app/backend/.venv` 생성됨.
+- GitHub 저장소 <https://github.com/2JUNSIK/ontology.git>에서 버전 관리(main 브랜치).
   플랫폼은 Windows 11 + PowerShell.
+
+### 마일스톤마다 지키는 작업 방식 (사용자 상시 지시)
+코드 작성 후 **커밋 전에** 적대적 서브에이전트로 코드 검수 + 엣지케이스 테스트를 수행하고,
+must-fix를 반영한 뒤 커밋/푸시한다. 재사용 리뷰어는 `.claude/agents/ontology-reviewer.md`
+(다음 세션부터 `ontology-reviewer` 타입으로 호출 가능; 당세션 신규 생성 시엔 로드 안 됨 →
+범용 에이전트에 동일 지침으로 대체). 커밋 메시지 here-string에 **큰따옴표 금지**
+(PowerShell 5.1에서 인자 분할됨).
 
 ## 사용자에게 먼저 알려야 할 것 (사전 경고 · 프로세스 가드레일)
 
@@ -66,35 +76,44 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
    처리, 값은 반드시 파라미터 바인딩(`$param`). DDL에 사용자 문자열을 직접 끼워넣지 말 것.
 4. **스키마 메타 vs 인스턴스 데이터 분리**: 설계된 스키마 자체는 `:_Schema` 메타노드로,
    실제 도메인 인스턴스는 일반 라벨 노드로 저장한다.
-5. **Claude 호출(`claude_enricher.py`)**: 반드시 **`claude-api` 스킬**을 사용해 SDK 호출
-   형태(모델 ID, 구조화 출력, prompt caching 프리픽스)를 확정한다. API 파라미터를 임의로
-   단정하지 말 것. 기본 모델은 `claude-opus-4-8`. 안정 프리픽스(시스템 지침 + 시드
-   온톨로지 + 도메인 가이드)에 `cache_control`을 적용하고 가변 서픽스(설문 답변 + draft)를
-   분리한다. 출력은 `EnrichmentResponse`로 **구조화 강제**.
+5. **Claude 호출(`claude_enricher.py`)**: SDK 형태는 **`claude-api` 스킬**로 확정
+   (모델 `claude-opus-4-8`). **구현됨(M3)**: `client.messages.parse(output_format=_EnrichmentOut)`
+   → `resp.parsed_output`. structured output이 free-form dict를 미지원하므로 Claude에는
+   명시 필드 스키마(`_EnrichmentOut`)로 받고 내부 `EnrichmentResponse`로 매핑하며, 이때
+   **payload를 코어 모델로 재검증**한다(불변식 §3와 결합 — `target_label` 포함 모든 식별자가
+   `_clean_identifier`를 통과해야 함). 안정 프리픽스(지침+시드+가이드)에 `cache_control`,
+   가변부(답변+draft)는 user 턴. **캐시 주의**: 현재 프리픽스 ~1600토큰 < Opus 4.8 최소치
+   4096 → 실제 캐시는 아직 미적용(오류 아님). 키 없음/실패 시 빈 응답으로 우아하게 열화.
+   **비용**: `/api/suggest`가 매 호출 실제 API를 부른다.
 6. **비밀키**: `ANTHROPIC_API_KEY`는 백엔드에서만 사용(프론트 노출 금지). `.env`는
    gitignore, `.env.example` 제공.
 
 ## 기술 스택 / 예정 명령 (PLAN.md §9)
 
-- 백엔드: Python **FastAPI** (neo4j python driver + anthropic SDK), 포트 8000.
-- 프론트: **React + Vite** (그래프 시각화 `react-force-graph`), 포트 5173.
-- Neo4j: 로컬 **Docker** `neo4j:5-community`, `bolt://localhost:7687`, 브라우저 7474.
+- 백엔드: Python **3.14** + **FastAPI**, `neo4j` 드라이버 **6.2.0**(계획의 5.x 대신 상위 —
+  M4는 6.x API 기준), `anthropic` **0.119**, 포트 8000.
+- 프론트: **React + Vite**, 그래프 시각화 **`react-force-graph-2d`**(경량 2D 전용), 포트 5173.
+- Neo4j: 로컬 **Docker** `neo4j:5-community`(실행 시 5.26 community), `bolt://localhost:7687`,
+  브라우저 7474.
 
-스캐폴드가 생긴 뒤의 실행(앱은 `app/` 하위에 배치하기로 결정됨):
+실행(이미 스캐폴드/venv 존재 — 아래 명령 동작함):
 ```powershell
 # 0) Neo4j (Docker Desktop이 꺼져 있으면 먼저 기동)
 cd app; docker compose up -d
-# 1) 백엔드
-cd backend; python -m venv .venv; .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt; uvicorn app.main:app --reload --port 8000
-# 2) 프론트
+# 1) 백엔드 (venv 이미 있음: app\backend\.venv). 없으면 python -m venv .venv 먼저
+cd backend; .\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload --port 8000   # http://localhost:8000/health, /docs
+# 2) 프론트 (M5부터 실제 소스)
 cd ..\frontend; npm install; npm run dev
-# 단위테스트 (핵심): cypher_builder(스키마→Cypher, 인젝션 방지), survey 매핑 규칙
-cd app\backend; pytest
 ```
-> 참고: PLAN.md 원문 §2/§9는 앱 루트를 `ontology-builder/`로 표기하나, 최신 결정은
-> **`ontology/app/`** 하위 배치(PLAN.md와 문서는 `ontology/` 루트 유지)다. 코드 스캐폴드
-> 시 이 레이아웃을 따르고, PLAN.md의 해당 표기도 함께 정합화할 것.
+**테스트(핵심 게이트)** — venv의 python으로 직접 실행하는 것이 확실하다:
+```powershell
+& "app\backend\.venv\Scripts\python.exe" -m pytest app\backend   # 현재 100개 통과
+```
+- `pytest.ini`가 `pythonpath=.`/`testpaths=tests` 설정. 테스트는 `app.모듈` 로 임포트.
+- **`tests/conftest.py`가 모든 테스트에서 실제 Claude 호출을 차단**(autouse fixture로
+  `ANTHROPIC_API_KEY` 공백화). Claude 경로를 검증하는 테스트는 `_make_client`를 모킹한다.
+  → 테스트 추가 시 실제 API를 부르지 말 것(비용).
 
 ## 로컬 Docker / Neo4j 환경 (검증됨 — 재조사 불필요)
 

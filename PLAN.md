@@ -12,9 +12,9 @@ K-water의 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) �
 현장 직원에게 있다. 이 간극을 "설문 + LLM 보강" 하이브리드로 메운다.
 
 **현재 디렉토리 상태**: 이 앱 전용으로 따로 만든 `K-water/ontology/` 디렉토리에서
-구축한다(현재 `PLAN.md`·`CLAUDE.md`만 존재하는 그린필드). 앱 소스는 하위 `app/`에
-배치하고 문서는 `ontology/` 루트에 둔다. `causal_inference/`는 `K-water/` 아래 형제
-디렉토리로 이 앱과 무관.
+구축한다. 앱 소스는 하위 `app/`에 배치하고 문서는 `ontology/` 루트에 둔다. 현재
+**M0~M3까지 구축 완료**(아래 "진행 현황" 참조). `causal_inference/`는 `K-water/`
+아래 형제 디렉토리로 이 앱과 무관.
 
 **소스 관리**: GitHub 저장소 <https://github.com/2JUNSIK/ontology.git>에서 버전 관리한다.
 
@@ -29,6 +29,26 @@ K-water의 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) �
   기존 `genesis`·`cvat` 스택과 충돌 방지. 7474/7687 포트는 현재 사용 가능.
 - **범위**: 동작하는 **MVP 우선** — 핵심 파이프라인 1개를 end-to-end로 완성.
 - **환경**: Windows 11, PowerShell.
+
+## 진행 현황 (2026-07-24 기준)
+
+**완료: M0 · M1 · M2 · M3** (백엔드 파이프라인의 설문→draft→Claude 보강까지 동작).
+**남음: M4**(Cypher/Neo4j 반영) · **M5**(프론트) · **M6**(통합 다듬기).
+
+- **테스트**: `pytest` 100개 전부 통과. 실행 위치 `app/backend`.
+- **검수 워크플로**: 마일스톤마다 적대적 서브에이전트로 코드 검수 + 엣지케이스 테스트 후 커밋.
+  재사용 리뷰어를 `.claude/agents/ontology-reviewer.md`로 추가함.
+- **실제 스택 확정(계획 대비 변동)**:
+  - Python **3.14**, `neo4j` 파이썬 드라이버 **6.2.0**(계획의 5.x 대신 상위 버전 — M4에서
+    6.x API 기준으로 작성). 안정성 원하면 `neo4j>=5.20,<6`로 핀 고정 고려.
+  - 프론트 그래프 라이브러리는 경량 2D 전용 **`react-force-graph-2d`** 사용(계획의
+    `react-force-graph` 통합 패키지 대신).
+  - Claude 구조화 출력은 `client.messages.parse(output_format=…)` + `parsed_output`
+    (anthropic 0.119, 패키지에서 실재 확인). 모델 `claude-opus-4-8`.
+- **알려진 한계**: prompt caching 배선은 완료했으나 현재 안정 프리픽스가 ~1600토큰으로
+  Opus 4.8 최소 캐시치(4096) 미달 → 실제 캐시는 아직 미적용(오류 아님). 프리픽스가 커지면 자동 활성화.
+- **비용 주의**: `/api/suggest`는 매 호출 실제 Claude를 부른다(운영 시 상한/모니터링 필요).
+  테스트는 `tests/conftest.py`가 실제 호출을 전면 차단.
 
 ---
 
@@ -224,17 +244,21 @@ cd ..\frontend; npm install; npm run dev   # http://localhost:5173
 
 ## 10. 구현 마일스톤 (순서)
 
-- **M0** 스캐폴드: `app/` 디렉토리, docker-compose(name/볼륨 분리), requirements/package.json.
-  Docker Desktop 기동 후 `docker compose up`(neo4j:5-community 캐시 사용, 즉시 기동)로
-  7474/7687 Neo4j 접속 확인 — 기존 `genesis`·`cvat` 스택과 포트·볼륨 충돌 없는지 점검.
-- **M1** `models.py` + `seed_ontology.py` (공통 표현 + 도메인 시드). *(선행 필수)*
-- **M2** `survey.py`: 설문 문항 + 답변→draft 규칙, `/api/survey/*`, `/api/suggest`(Claude 제외 draft만).
-- **M3** `claude_enricher.py`: Claude 보강 붙이기 (`claude-api` 스킬로 SDK 확정).
-- **M4** `cypher_builder.py` + `neo4j_service.py` + `/api/schema/commit`, `/api/graph` (단위테스트 포함).
-- **M5** 프론트 `SurveyWizard` → `SchemaReview` → `GraphView` 연결.
-- **M6** end-to-end 통합 확인 + 다듬기(에러 처리, 로딩 상태).
+- **[x] M0** 스캐폴드: `app/docker-compose.yml`(name/볼륨 분리), `.env.example`, README,
+  `backend/`(requirements + FastAPI `/health`), `frontend/package.json`. Neo4j 5.26 community
+  기동·접속 확인, 기존 스택과 충돌 없음.
+- **[x] M1** `models.py`(OntologySchema 등 + 식별자 인젝션 방어선) + `seed_ontology.py`
+  (8노드/10관계 시드 + `DOMAIN_GUIDE`). 엣지케이스 테스트 포함.
+- **[x] M2** `survey.py`(8문항 + `build_draft` 순수함수, 시드 deep copy) + `routers/survey.py`
+  (`GET /api/survey/questions`) + `routers/schema.py`(`POST /api/suggest`, draft만).
+- **[x] M3** `claude_enricher.py`(구조화 출력 + 캐시 배선 + 우아한 열화) → `/api/suggest`에
+  enrichment 연결. LLM payload는 코어 모델로 재검증(§3/§5).
+- **[ ] M4** `cypher_builder.py` + `neo4j_service.py` + `/api/schema/commit`, `/api/graph`
+  (단위테스트 포함). **neo4j 드라이버 6.x 기준으로 작성.**
+- **[ ] M5** 프론트 `SurveyWizard` → `SchemaReview` → `GraphView` 연결.
+- **[ ] M6** end-to-end 통합 확인 + 다듬기(에러 처리, 로딩 상태).
 
-M3/M4는 M2 이후 병렬 가능.
+M4는 M1 이후 착수 가능.
 
 ## 검증 (Verification)
 

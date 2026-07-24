@@ -4,18 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**진행: M0~M3 완료** (2026-07-24 기준). 백엔드 파이프라인이 설문→draft→Claude 보강까지
-동작한다. **남은 것: M4**(Cypher/Neo4j 반영) · **M5**(프론트) · **M6**(통합). 마일스톤별
-상세·체크리스트는 `PLAN.md` §10과 "진행 현황" 섹션 참조.
+**v2 피벗 완료. 진행: N1~N5 완료** (2026-07-24 기준). 제품이 "구조화 설문형 온톨로지 설계"
+(v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
+지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
+백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **남은 것: N6**(구 v1 코드 정리) + 커밋.
 
-- **`PLAN.md`가 사양서(source of truth)다.** 작업 시작 전 통독할 것 — 아키텍처, 중간표현,
-  API 엔드포인트, 마일스톤이 모두 여기 있다.
-- **현재 존재하는 코드**(`app/backend/app/`): `models.py`, `seed_ontology.py`, `survey.py`,
-  `claude_enricher.py`, `config.py`, `main.py`, `routers/{survey,schema}.py`. 아직 없는 것:
-  `cypher_builder.py`, `neo4j_service.py`, `routers/graph.py`(M4), 프론트 소스(M5).
-- **아래 "명령"들은 이제 실제로 동작한다**(스캐폴드/의존성 존재). `app/backend/.venv` 생성됨.
-- GitHub 저장소 <https://github.com/2JUNSIK/ontology.git>에서 버전 관리(main 브랜치).
-  플랫폼은 Windows 11 + PowerShell.
+- **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
+  API(§5), 마일스톤(N1~N6, §10), "진행 현황"이 모두 여기 있다.
+- **현재 코드**(`app/backend/app/`):
+  - [v2 핵심] `models.py`(Entity/Relation/Extraction + 식별자 방어선), `cypher_builder.py`
+    (`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`), `neo4j_service.py`
+    (프로젝트 CRUD·`ingest`·`fetch_project_graph`), `claude_extractor.py`, `routers/projects.py`,
+    `config.py`, `main.py`.
+  - [v1 잔존 — N6에서 제거 예정] `survey.py`, `claude_enricher.py`, `routers/{survey,schema,graph}.py`,
+    `cypher_builder`의 스키마-메타 함수. **단 `seed_ontology.py`의 `DOMAIN_GUIDE`는 extractor가
+    재사용하므로 유지**, `SEED_ONTOLOGY`는 v1용(제거 대상).
+  - 프론트(`app/frontend/src/`): `App.tsx`, `api.ts`, `types.ts`,
+    `components/{ProjectList,Workspace,ExtractionPreview,GraphView}.tsx`. (구 `SurveyWizard`/
+    `SchemaReview`는 이미 삭제.)
+- **명령은 실제로 동작**(venv·node_modules 존재). 개발 중 백엔드(uvicorn :8000)·프론트(vite :5173)
+  서버가 백그라운드로 떠 있을 수 있다. **백엔드 코드 변경 시 재시작 필요**(--reload 미사용 시 —
+  포트 8000 리스너 kill 후 재기동). 프론트는 Vite HMR로 자동 반영.
+- **테스트 154 passed / 11 skipped**(통합은 opt-in). GitHub <https://github.com/2JUNSIK/ontology.git>
+  (main 브랜치). Windows 11 + PowerShell.
 
 ### 마일스톤마다 지키는 작업 방식 (사용자 상시 지시)
 코드 작성 후 **커밋 전에** 적대적 서브에이전트로 코드 검수 + 엣지케이스 테스트를 수행하고,
@@ -40,7 +51,7 @@ must-fix를 반영한 뒤 커밋/푸시한다. 재사용 리뷰어는 `.claude/a
   **직접 검증**하고, 불일치를 발견하면 추측하지 말고 그대로 알린다(예: `.env` 저장 누락,
   잘못된 위치 편집, 미저장). 조용히 넘어가지 말 것.
 - **개발 프로세스 누락 신호**: 다음이 빠졌으면 진행 전에 짚는다 — 핵심 로직 변경 시
-  **단위테스트**(특히 `cypher_builder`·`survey` 매핑, 설계 불변식 §2·§3), **커밋/브랜치**
+  **단위테스트**(특히 `cypher_builder`의 ingest/추출 매핑, 설계 불변식 §2·§3), **커밋/브랜치**
   타이밍(비밀 커밋 금지, main 직접 작업 지양), **의존성/스캐폴드 정합성**(PLAN.md와 실제
   레이아웃 어긋남), **포트·컨테이너·볼륨 충돌**(§"로컬 Docker/Neo4j 환경").
 - **되돌리기 어렵거나 외부로 나가는 작업은 먼저 확인**: 데이터 삭제/덮어쓰기, force push,
@@ -53,67 +64,82 @@ must-fix를 반영한 뒤 커밋/푸시한다. 재사용 리뷰어는 `.claude/a
 
 ## 무엇을 만드는가 (빅픽처)
 
-K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지식을 가진 직원이, 온톨로지
-이론을 몰라도 설문 답변만으로 **Neo4j 온톨로지(그래프 모델)를 설계**하도록 돕는 웹앱.
-"구조화 설문 + Claude LLM 보강" **하이브리드 엔진**이 핵심 차별점이다.
+K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지식을 가진 직원이, 온톨로지 이론을
+몰라도 **자연어로 지식을 한 문장씩 입력**하면 Claude가 노드·관계를 추출해 **프로젝트별
+지식그래프에 누적**해 주는 웹앱. "자연어 입력 + LLM 추출 + 미리보기 확인"이 핵심.
 
-**end-to-end 데이터 흐름 (이 순서가 아키텍처의 뼈대):**
+**end-to-end 데이터 흐름 (v2 아키텍처의 뼈대):**
 ```
-설문 답변 → survey.py(규칙: 답변→draft 스키마) → claude_enricher.py(Claude 보강 제안)
-  → 사용자 검토/편집 → cypher_builder.py(스키마 JSON→Cypher) → Neo4j 반영 → GraphView 시각화
+프로젝트 선택 → 지식 문장 입력 → claude_extractor.extract(엔티티·관계 추출)
+  → 미리보기/편집(수락·제외) → cypher_builder.build_ingest_statements(MERGE)
+  → neo4j_service.ingest(프로젝트 그래프에 병합) → GraphView 누적 시각화 → 반복
 ```
-6단계 파이프라인은 PLAN.md §1 참조. MVP는 이 파이프라인 1개를 완성하는 것이 목표.
+예: "조류경보제는 관심·경계·대발생 3단계로 운영된다" → `(조류경보제:제도)`,`(관심:경보단계)`…
++ `(조류경보제)-[단계]->(관심)`… 을 그래프에 추가. 같은 개념 재입력 시 MERGE로 병합(누적).
+자세한 흐름은 PLAN.md §1 참조.
 
 ## 반드시 지켜야 할 설계 불변식 (여러 파일에 걸친 규약)
 
-1. **단일 중간표현(Single Source of Truth)**: `backend/app/models.py`의 Pydantic
-   `OntologySchema`(NodeLabel/RelationshipType/PropertyDef)가 설문·Claude·Neo4j·프론트
-   전부가 공유하는 유일한 표현이다. 프론트 `types.ts`는 이 모델과 1:1 대응시킨다. 새 필드는
-   반드시 이 모델에서 시작해 양쪽으로 전파한다.
-2. **`cypher_builder.py`는 순수 함수**: 스키마 JSON → Cypher 문자열 변환은 부수효과 없이
-   구현하고 단위테스트로 검증한다. Neo4j 실행은 `neo4j_service.py`가 담당(관심사 분리).
-3. **Cypher 인젝션 방지**: 라벨/관계타입 같은 DDL 식별자는 **화이트리스트 검증 + 백틱**
-   처리, 값은 반드시 파라미터 바인딩(`$param`). DDL에 사용자 문자열을 직접 끼워넣지 말 것.
-4. **스키마 메타 vs 인스턴스 데이터 분리**: 설계된 스키마 자체는 `:_Schema` 메타노드로,
-   실제 도메인 인스턴스는 일반 라벨 노드로 저장한다.
-5. **Claude 호출(`claude_enricher.py`)**: SDK 형태는 **`claude-api` 스킬**로 확정
-   (모델 `claude-opus-4-8`). **구현됨(M3)**: `client.messages.parse(output_format=_EnrichmentOut)`
-   → `resp.parsed_output`. structured output이 free-form dict를 미지원하므로 Claude에는
-   명시 필드 스키마(`_EnrichmentOut`)로 받고 내부 `EnrichmentResponse`로 매핑하며, 이때
-   **payload를 코어 모델로 재검증**한다(불변식 §3와 결합 — `target_label` 포함 모든 식별자가
-   `_clean_identifier`를 통과해야 함). 안정 프리픽스(지침+시드+가이드)에 `cache_control`,
-   가변부(답변+draft)는 user 턴. **캐시 주의**: 현재 프리픽스 ~1600토큰 < Opus 4.8 최소치
-   4096 → 실제 캐시는 아직 미적용(오류 아님). 키 없음/실패 시 빈 응답으로 우아하게 열화.
-   **비용**: `/api/suggest`가 매 호출 실제 API를 부른다.
+1. **단일 중간표현(Single Source of Truth)**: `backend/app/models.py`의 Pydantic 모델이
+   설문·Claude·Neo4j·프론트가 공유하는 유일한 표현이다. **v2 핵심**: `Entity`(name·type·
+   description) / `Relation`(source·target·type·description) / `Extraction`(entities·relations·
+   summary). 프론트 `types.ts`는 이 모델과 1:1 대응. 새 필드는 반드시 이 모델에서 시작해 양쪽
+   전파. (`OntologySchema`/`NodeLabel`/… 등 v1 모델은 N6까지 잔존하나 신규 흐름은 KG 모델 사용.)
+2. **`cypher_builder.py`는 순수 함수**: JSON→Cypher 변환은 부수효과·Neo4j 접근 없이 구현하고
+   단위테스트로 검증한다. 실행은 `neo4j_service.py`가 담당(관심사 분리). v2 진입점은
+   `build_ingest_statements(project_id, Extraction)` → `list[CypherStatement]`.
+3. **Cypher 인젝션 방지**: **값(엔티티 이름·설명·project_id)은 반드시 파라미터 바인딩(`$param`)**.
+   **식별자(타입 라벨·관계타입)는 화이트리스트(`escape_identifier`=`_clean_label_or_type` 재검증)
+   + 백틱**. 동적 라벨/관계타입은 UNWIND로 파라미터화할 수 없으므로 **타입별로 그룹핑해 문 하나당
+   검증된 식별자 1개만** 삽입한다. 사용자/LLM 문자열을 식별자 위치에 직접 끼워넣지 말 것.
+4. **메타 vs 인스턴스 분리 (v2)**: 프로젝트 메타는 `(:_Project {id,name,…})`. 지식 노드는 공통
+   기본 라벨 `(:_Entity {_project,_name,description})` + **동적 타입 라벨**(예: `:현상`,`:경보단계`).
+   정체성 = **(`_project`,`_name`) 복합 UNIQUE** → 같은 이름 재입력 시 MERGE 병합. 관계는 같은
+   프로젝트의 `:_Entity` 사이. **라벨/관계타입은 `_` 프리픽스 금지**(내부/메타 예약 —
+   `_clean_label_or_type`가 거부; 값인 이름/설명엔 이 제약 없음).
+5. **Claude 호출(`claude_extractor.py`)**: SDK 형태는 **`claude-api` 스킬**로 확정(모델
+   `claude-opus-4-8`). `client.messages.parse(output_format=_ExtractionOut)` → `resp.parsed_output`.
+   free-form dict 미지원 → 전용 출력 스키마로 받고 내부 `Extraction`으로 **재검증**(타입 라벨/
+   관계타입이 `_clean_label_or_type` 방어선을 통과해야 함, 실패 항목은 드롭). 안정 프리픽스
+   (지침+`DOMAIN_GUIDE`)에 `cache_control`, 가변부(입력 텍스트+기존 엔티티 힌트)는 user 턴.
+   키 없음/빈 입력/실패 시 빈 `Extraction`으로 **우아한 열화**. **비용**: `/api/projects/{id}/extract`가
+   매 호출 실제 API를 부른다(프론트에 고지).
 6. **비밀키**: `ANTHROPIC_API_KEY`는 백엔드에서만 사용(프론트 노출 금지). `.env`는
    gitignore, `.env.example` 제공.
 
-## 기술 스택 / 예정 명령 (PLAN.md §9)
+## 기술 스택 / 명령 (PLAN.md §9)
 
-- 백엔드: Python **3.14** + **FastAPI**, `neo4j` 드라이버 **6.2.0**(계획의 5.x 대신 상위 —
-  M4는 6.x API 기준), `anthropic` **0.119**, 포트 8000.
+- 백엔드: Python **3.14** + **FastAPI**, `neo4j` 드라이버 **6.2.0**(6.x API 기준 —
+  `execute_query(...,routing_=,database_=)`, `session.run`/`execute_write`, `record.data()`),
+  `anthropic` **0.119**, 포트 8000.
 - 프론트: **React + Vite**, 그래프 시각화 **`react-force-graph-2d`**(경량 2D 전용), 포트 5173.
 - Neo4j: 로컬 **Docker** `neo4j:5-community`(실행 시 5.26 community), `bolt://localhost:7687`,
   브라우저 7474.
 
-실행(이미 스캐폴드/venv 존재 — 아래 명령 동작함):
+실행(스캐폴드/venv/node_modules 존재 — 동작함):
 ```powershell
 # 0) Neo4j (Docker Desktop이 꺼져 있으면 먼저 기동)
 cd app; docker compose up -d
-# 1) 백엔드 (venv 이미 있음: app\backend\.venv). 없으면 python -m venv .venv 먼저
+# 1) 백엔드 (venv: app\backend\.venv)
 cd backend; .\.venv\Scripts\Activate.ps1
 uvicorn app.main:app --reload --port 8000   # http://localhost:8000/health, /docs
-# 2) 프론트 (M5부터 실제 소스)
-cd ..\frontend; npm install; npm run dev
+# 2) 프론트
+cd ..\frontend; npm install; npm run dev     # http://localhost:5173
 ```
 **테스트(핵심 게이트)** — venv의 python으로 직접 실행하는 것이 확실하다:
 ```powershell
-& "app\backend\.venv\Scripts\python.exe" -m pytest app\backend   # 현재 100개 통과
+& "app\backend\.venv\Scripts\python.exe" -m pytest app\backend      # 154 passed / 11 skipped
+# Neo4j 통합 테스트는 opt-in(파괴적) — Neo4j 기동 상태에서만:
+$env:RUN_NEO4J_TESTS=1; & "app\backend\.venv\Scripts\python.exe" -m pytest app\backend\tests\test_kg_integration.py; Remove-Item Env:\RUN_NEO4J_TESTS
 ```
 - `pytest.ini`가 `pythonpath=.`/`testpaths=tests` 설정. 테스트는 `app.모듈` 로 임포트.
-- **`tests/conftest.py`가 모든 테스트에서 실제 Claude 호출을 차단**(autouse fixture로
-  `ANTHROPIC_API_KEY` 공백화). Claude 경로를 검증하는 테스트는 `_make_client`를 모킹한다.
+- **`tests/conftest.py`가 모든 테스트에서 실제 Claude 호출을 차단**(autouse로 `ANTHROPIC_API_KEY`
+  공백화) + 세션 스키마 리셋. Claude 경로 검증 테스트는 `_make_client`를 모킹한다.
   → 테스트 추가 시 실제 API를 부르지 말 것(비용).
+- **통합 테스트는 `RUN_NEO4J_TESTS`로 opt-in**(기본 실행에선 skip). commit/ingest가 데이터를
+  쓰므로 파괴적 — 전용 테스트 프로젝트/라벨을 만들고 teardown에서 정리한다.
+- **프론트 타입체크**: `cd app/frontend; npx tsc --noEmit`(dev는 esbuild라 타입체크 생략됨).
+  파일 저장 시 UTF-8 유지에 주의(과거 Write에서 널 바이트가 섞인 적 있음 → 저장 후 스캔 권장).
 
 ## 로컬 Docker / Neo4j 환경 (검증됨 — 재조사 불필요)
 
@@ -136,9 +162,9 @@ cd ..\frontend; npm install; npm run dev
 
 ## 도메인 참고 (녹조/수질, PLAN.md §8)
 
-시드 온톨로지와 Claude 프롬프트 프리픽스에 쓰이는 핵심 도메인 사실:
+`DOMAIN_GUIDE`(seed_ontology.py)가 Claude 추출 프롬프트의 안정 프리픽스로 쓰인다. 핵심 사실:
 - 조류경보제 임계값(남조류세포수): 관심 ≥1,000 / 경계 ≥10,000 / 대발생 ≥1,000,000 cells/mL.
-- 핵심 노드: 저수지, 측정소, 수질항목(클로로필-a·남조류세포수·T-P·T-N·DO·수온 등),
-  측정값(측정소·항목·시각을 잇는 이벤트 노드), 조류경보, 오염원, 대응조치, 기관.
-- 모델링 포인트: 측정값은 별도 이벤트 노드로 분리(측정소×항목×시각). 새 스키마 제안 시 이
-  패턴을 유지·권장할 것.
+- 엔티티 **타입 라벨 예시**: 현상·생물·제도·경보단계·지표·오염원·대응조치·기관·저수지·측정소.
+  관계타입 예시: 원인·단계·기준지표·유입·관할·측정.
+- 지식그래프는 **인스턴스/개념 수준**(예: `(녹조:현상)`, `(관심:경보단계)`). 같은 이름은
+  프로젝트 내에서 MERGE로 하나의 노드로 병합된다.

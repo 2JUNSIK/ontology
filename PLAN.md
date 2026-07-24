@@ -1,281 +1,192 @@
-# 온톨로지 설계 웹앱 (Ontology Builder) — MVP 구현 계획
+# 지식그래프 빌더 (Knowledge Graph Builder) — MVP 구현 계획 (v2)
+
+> **v2 피벗(2026-07-24)**: 기존 "구조화 설문 마법사" 방향을 폐기하고, **자연어 지식 입력형
+> 지식그래프 빌더**로 전환했다. 직원이 문장으로 지식을 입력하면 Claude가 엔티티(노드)와
+> 관계를 추출해 **프로젝트별 지식그래프에 누적**한다. (v1 설문/스키마 흐름은 §부록 참조.)
 
 ## Context (배경)
 
-K-water의 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지식을 가진 직원들이,
-질문/답변을 통해 Neo4j 온톨로지(그래프 모델: 노드·관계·속성)를 **직접 설계**하도록
-도와주는 웹 애플리케이션을 만든다. 직원은 온톨로지 이론을 몰라도, 구조화된 설문에
-답하고 자연어로 도메인을 설명하면 앱이 "노드는 이렇게, 관계는 이렇게 설계하세요"를
-제안한다. 최종 설계는 Neo4j에 반영되고 화면에 그래프로 시각화(서빙)된다.
+K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지식을 가진 직원이, 온톨로지
+이론을 몰라도 **자연어로 지식을 한 문장씩 입력**하면, 앱이 그 문장에서 노드·관계를 뽑아
+지금까지 쌓인 지식그래프에 자동으로 더해 주는 웹앱.
 
-**해결하려는 문제**: 온톨로지/그래프 모델링은 전문 기술인데, 정작 도메인 지식은
-현장 직원에게 있다. 이 간극을 "설문 + LLM 보강" 하이브리드로 메운다.
+예) 프로젝트 "녹조 대응":
+- "녹조는 남조류가 과도하게 증식해 물이 녹색으로 변하는 현상이다."
+  → `(녹조:현상)`, `(남조류:생물)`, `(녹조)-[원인]->(남조류)`
+- "조류경보제는 관심·경계·대발생 3단계로 운영된다."
+  → `(조류경보제:제도)`,`(관심:경보단계)`… `(조류경보제)-[단계]->(관심)`…
+- "관심 단계는 남조류세포수가 1000 cells/mL 이상일 때 발령된다."
+  → `(남조류세포수:지표)` 신규, `(관심)-[기준지표]->(남조류세포수)`; 이미 있는 `관심`은 재사용.
 
-**현재 디렉토리 상태**: 이 앱 전용으로 따로 만든 `K-water/ontology/` 디렉토리에서
-구축한다. 앱 소스는 하위 `app/`에 배치하고 문서는 `ontology/` 루트에 둔다. 현재
-**M0~M3까지 구축 완료**(아래 "진행 현황" 참조). `causal_inference/`는 `K-water/`
-아래 형제 디렉토리로 이 앱과 무관.
+**해결 문제**: 온톨로지/그래프 모델링은 전문 기술인데 도메인 지식은 현장 직원에게 있다.
+이 간극을 "자연어 입력 + LLM 추출 + 미리보기 확인"으로 메운다.
 
-**소스 관리**: GitHub 저장소 <https://github.com/2JUNSIK/ontology.git>에서 버전 관리한다.
+**소스 관리**: GitHub <https://github.com/2JUNSIK/ontology.git> (main). Windows 11 + PowerShell.
 
-## 확정된 결정 (사용자 선택)
+## 확정된 결정 (v2)
 
-- **설계 엔진 = 하이브리드**: (1) 구조화 설문 마법사로 뼈대(엔티티·관계·속성)를 잡고,
-  (2) Claude API가 자연어 답변을 분석해 누락된 노드/관계/속성을 보강·검증 제안.
-- **스택**: 백엔드 Python **FastAPI** (neo4j python driver + anthropic SDK),
-  프론트 **React** (그래프 시각화 `react-force-graph`).
-- **Neo4j**: 로컬 **Docker** (`neo4j:5-community` — 로컬에 이미 캐시됨, 재다운로드 불필요;
-  `bolt://localhost:7687`). compose 프로젝트명/볼륨명을 `ontology-builder` 계열로 분리해
-  기존 `genesis`·`cvat` 스택과 충돌 방지. 7474/7687 포트는 현재 사용 가능.
-- **범위**: 동작하는 **MVP 우선** — 핵심 파이프라인 1개를 end-to-end로 완성.
-- **환경**: Windows 11, PowerShell.
+- **인터페이스**: 구조화 설문 **폐기** → **자유 자연어 지식 입력**.
+- **흐름**: 입력 → Claude 추출 → **미리보기/편집 → 확인 시 그래프 병합(MERGE)**. (자동반영 아님.)
+- **프로젝트**: 여러 프로젝트 **생성/전환/삭제**, 각 프로젝트가 독립 지식그래프.
+- **스택**: 백엔드 Python 3.14 + FastAPI, `neo4j` 6.2, `anthropic` 0.119(모델 `claude-opus-4-8`),
+  프론트 React + Vite + `react-force-graph-2d`. Neo4j 로컬 Docker `neo4j:5-community`(bolt 7687).
+- **재사용**: `neo4j_service`(드라이버/실행), `cypher_builder.escape_identifier`(인젝션 방어),
+  Claude 구조화 출력 패턴, `GraphView`, `models`의 식별자 방어선(`_clean_identifier` 등).
 
 ## 진행 현황 (2026-07-24 기준)
 
-**완료: M0 · M1 · M2 · M3** (백엔드 파이프라인의 설문→draft→Claude 보강까지 동작).
-**남음: M4**(Cypher/Neo4j 반영) · **M5**(프론트) · **M6**(통합 다듬기).
+**완료: N1~N5** (백엔드 v2 + 프론트 재작성 완료, end-to-end 동작 확인). **남음: N6**(구 v1
+코드 정리) + 커밋.
 
-- **테스트**: `pytest` 100개 전부 통과. 실행 위치 `app/backend`.
-- **검수 워크플로**: 마일스톤마다 적대적 서브에이전트로 코드 검수 + 엣지케이스 테스트 후 커밋.
-  재사용 리뷰어를 `.claude/agents/ontology-reviewer.md`로 추가함.
-- **실제 스택 확정(계획 대비 변동)**:
-  - Python **3.14**, `neo4j` 파이썬 드라이버 **6.2.0**(계획의 5.x 대신 상위 버전 — M4에서
-    6.x API 기준으로 작성). 안정성 원하면 `neo4j>=5.20,<6`로 핀 고정 고려.
-  - 프론트 그래프 라이브러리는 경량 2D 전용 **`react-force-graph-2d`** 사용(계획의
-    `react-force-graph` 통합 패키지 대신).
-  - Claude 구조화 출력은 `client.messages.parse(output_format=…)` + `parsed_output`
-    (anthropic 0.119, 패키지에서 실재 확인). 모델 `claude-opus-4-8`.
-- **알려진 한계**: prompt caching 배선은 완료했으나 현재 안정 프리픽스가 ~1600토큰으로
-  Opus 4.8 최소 캐시치(4096) 미달 → 실제 캐시는 아직 미적용(오류 아님). 프리픽스가 커지면 자동 활성화.
-- **비용 주의**: `/api/suggest`는 매 호출 실제 Claude를 부른다(운영 시 상한/모니터링 필요).
-  테스트는 `tests/conftest.py`가 실제 호출을 전면 차단.
-
----
+- **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
+  `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
+  `neo4j_service.py`(프로젝트 CRUD·`ingest`·`fetch_project_graph`), `claude_extractor.py`,
+  `routers/projects.py`. `main.py`에 projects 라우터 등록.
+- **프론트**: `App.tsx`(프로젝트 목록↔작업공간), `ProjectList`, `Workspace`(누적 그래프+지식
+  입력+추출 미리보기 오케스트레이션), `ExtractionPreview`(편집/선택 후 ingest), `GraphView`
+  (controlled, 타입별 색상). 구 `SurveyWizard`/`SchemaReview`는 삭제.
+- **테스트**: 154 passed / 11 skipped(통합 opt-in). 통합 11개는 실 Neo4j(`RUN_NEO4J_TESTS=1`)로
+  별도 전부 통과. 프론트 `tsc --noEmit` 0 에러.
+- **적대적 검수 완료**(백엔드·프론트 각각): 백엔드 **must-fix 없음**(인젝션·원자성·프로젝트
+  격리·503·모델 재검증 라이브 통과) + LOW 3건 반영(관계 중복 제거·stub 설명 `''` 정규화·
+  ingest 시 제약 방어). 프론트 must-fix 반영(제외 노드를 참조하는 관계 유령화 방지, 삭제
+  로딩상태, ingest 통계 표시, 미리보기 이탈 경고).
+- **구 v1(설문/스키마) 백엔드는 아직 제거 전**(N6): `survey.py`, `routers/survey.py`,
+  `routers/schema.py`, `routers/graph.py`, `claude_enricher.py`, `seed_ontology.SEED_ONTOLOGY`,
+  `cypher_builder`의 스키마-메타 함수와 대응 테스트가 새 코드와 병존 중.
 
 ## 1. 아키텍처 & 데이터 흐름
 
 ```
-[React 프론트]                    [FastAPI 백엔드]                  [외부]
- SurveyWizard  ──답변──▶  /api/suggest ──▶ survey.py (규칙: 답변→draft 스키마)
-                                        └─▶ claude_enricher.py ──▶ Anthropic API
- SchemaReview ◀─제안+draft─  EnrichmentResponse(보강 제안 JSON)
-   (검토·수정)  ──확정 스키마──▶ /api/schema (PUT)
-                            ──▶ /api/schema/commit ──▶ cypher_builder.py ─Cypher─▶ Neo4j
- GraphView   ◀──그래프 데이터── /api/graph ◀──────────────────────────────── Neo4j
+[React 프론트]                         [FastAPI 백엔드]                      [외부]
+ ProjectList  ──생성/선택──▶  /api/projects (CRUD) ─────────────▶ Neo4j (:_Project)
+ Workspace:
+   지식입력창 ──텍스트──▶ /api/projects/{id}/extract ─▶ claude_extractor ─▶ Anthropic API
+   미리보기  ◀──Extraction(entities,relations)─┘
+   (편집/확인) ──확정──▶ /api/projects/{id}/ingest ─▶ cypher_builder(MERGE) ─▶ Neo4j (:_Entity)
+   GraphView ◀──{nodes,links}── /api/projects/{id}/graph ◀──────────────────── Neo4j
 ```
 
-핵심 흐름 6단계:
-1. 직원이 설문에 답변(선택+자연어) → 2. `survey.py`가 규칙 기반으로 **draft 스키마**
-생성 → 3. `claude_enricher.py`가 draft+답변을 Claude에 보내 **보강 제안** 수신 →
-4. 사용자가 프론트에서 제안 수락/거부/편집 → 5. 확정 스키마를 `cypher_builder.py`가
-Cypher(제약·인덱스·메타노드)로 변환해 Neo4j 반영 → 6. `/api/graph`로 조회해 시각화.
+핵심 루프: **입력 → 추출(미리보기) → 확인/편집 → 병합(누적) → 반복.**
 
-## 2. 디렉토리 구조
+## 2. 데이터 모델 (Neo4j)
 
-```
-ontology/                         # 현재 디렉토리 (문서 루트 = git 저장소 루트)
-├─ PLAN.md
-├─ CLAUDE.md
-├─ .gitignore
-└─ app/
-   ├─ docker-compose.yml          # name: ontology-builder, neo4j:5-community(7474/7687), 볼륨 ontology_neo4j_data
-   ├─ .env.example                # ANTHROPIC_API_KEY, NEO4J_URI/USER/PASSWORD
-   ├─ README.md                   # 실행 방법
-   ├─ backend/
-   │  ├─ requirements.txt         # fastapi, uvicorn, neo4j, anthropic, pydantic, python-dotenv
-   │  ├─ app/
-   │  │  ├─ main.py               # FastAPI 앱 + CORS + 라우터 등록
-   │  │  ├─ config.py             # 환경변수 로드 (pydantic-settings)
-   │  │  ├─ models.py             # ★ 공통 중간표현 (OntologySchema 등 Pydantic)
-   │  │  ├─ seed_ontology.py      # ★ 녹조/수질 시드 온톨로지 (도메인 가이드 포함)
-   │  │  ├─ survey.py             # 설문 문항 정의 + 답변→draft 규칙
-   │  │  ├─ claude_enricher.py    # ★ Anthropic 호출 (prompt caching + 구조화 출력)
-   │  │  ├─ cypher_builder.py     # ★ 스키마 JSON → Cypher (순수 함수, 테스트 용이)
-   │  │  ├─ neo4j_service.py      # driver 세션 관리 + commit/query 실행
-   │  │  └─ routers/
-   │  │     ├─ survey.py          # /api/survey/*
-   │  │     ├─ schema.py          # /api/schema, /api/suggest, /api/schema/commit
-   │  │     └─ graph.py           # /api/graph
-   │  └─ tests/                   # cypher_builder, survey 규칙 단위테스트
-   └─ frontend/
-      ├─ package.json             # react, vite, react-force-graph, axios
-      └─ src/
-         ├─ api.ts                # 백엔드 클라이언트
-         ├─ types.ts              # OntologySchema TS 타입 (models.py와 대응)
-         ├─ App.tsx               # 3단계 스텝퍼
-         └─ components/
-            ├─ SurveyWizard.tsx   # 설문 단계
-            ├─ SchemaReview.tsx   # 제안 카드 + 스키마 편집
-            └─ GraphView.tsx      # ★ react-force-graph 시각화
-```
+- **프로젝트**: `(:_Project {id, name, description, created_ts})`. `id`는 uuid4 hex.
+- **엔티티(지식 노드)**: `(:_Entity {_project, _name, description})` + **동적 타입 라벨**
+  (예: `:현상`, `:생물`, `:제도`, `:경보단계`, `:지표`). 정체성 = **(`_project`,`_name`) 복합
+  UNIQUE 제약** → 같은 이름 재입력 시 자동 병합(MERGE).
+- **관계**: `(:_Entity)-[:동적관계타입 {description}]->(:_Entity)`, 양 끝이 같은 프로젝트.
+- 프로젝트 삭제 시 그 프로젝트의 `:_Entity`와 `:_Project`를 함께 정리.
 
-## 3. 공통 중간표현 (Single Source of Truth)
+## 3. 공통 중간표현 (models.py, Single Source of Truth)
 
-설문·Claude·Neo4j·프론트가 모두 공유하는 스키마 표현. `backend/app/models.py` (Pydantic):
+기존 식별자 방어선(`_clean_identifier`, `_clean_label_or_type`) 위에 KG 표현을 추가:
 
 ```python
-class PropertyDef(BaseModel):
-    name: str; type: Literal["string","int","float","date","boolean"]
-    required: bool = False; description: str = ""
-
-class NodeLabel(BaseModel):
-    label: str                      # 예: "측정소"
-    properties: list[PropertyDef]
-    key_property: str | None        # UNIQUE 제약 대상 (예: "측정소코드")
+class Entity(BaseModel):
+    name: str            # 값(파라미터 바인딩) — 길이 제한, 제어문자 거부
+    type: str = ""       # 타입 라벨(식별자) — 비면 미분류. 비지 않으면 _clean_label_or_type 검증
     description: str = ""
 
-class RelationshipType(BaseModel):
-    type: str                       # 예: "측정"  → (:측정소)-[:측정]->(:수질항목)
-    start_label: str; end_label: str
-    properties: list[PropertyDef] = []
+class Relation(BaseModel):
+    source: str; target: str   # 값(엔티티 이름)
+    type: str                  # 관계타입(식별자) — _clean_label_or_type 검증
     description: str = ""
 
-class OntologySchema(BaseModel):
-    nodes: list[NodeLabel]
-    relationships: list[RelationshipType]
-
-# Claude 보강 제안 (구조화 출력용)
-class Suggestion(BaseModel):
-    kind: Literal["add_node","add_relationship","add_property","warning"]
-    target: str; rationale: str
-    payload: dict                    # 제안된 NodeLabel/Relationship/Property
-class EnrichmentResponse(BaseModel):
-    suggestions: list[Suggestion]
-    summary: str
+class Extraction(BaseModel):   # Claude 추출 결과(미리보기/ingest 공용)
+    entities: list[Entity]
+    relations: list[Relation]
+    summary: str = ""
 ```
 
-## 4. 하이브리드 엔진 상세
+- **이름/설명은 값** → Cypher에 파라미터로만(`$param`). **타입 라벨/관계타입은 식별자** →
+  화이트리스트(`_clean_label_or_type`, 백틱/제어/‘_’프리픽스 거부) + 백틱 이스케이프.
+- 프론트 `types.ts`는 이 모델과 1:1 대응.
 
-### (a) 설문 문항 (녹조/수질 도메인, `survey.py`)
-예시 8문항 — 선택형 + 자유서술형 혼합:
-1. 관리 대상 물리 자산은? (저수지/보/취수장/정수장 …다중선택)
-2. 수질을 어디서 측정하나요? (측정소 개념 유무)
-3. 어떤 수질 항목을 관측하나요? (클로로필-a, 남조류세포수, T-P, T-N, DO, 수온 …)
-4. 조류경보제를 운영하나요? (관심/경계/대발생 단계)
-5. 오염원을 추적하나요? (점오염원/비점오염원)
-6. 어떤 대응조치를 하나요? (조류제거선, 살수, 방류량 조절 …)
-7. 관련 기관·조직은? (유역환경청, 지자체, 물관리센터 …)
-8. (자유서술) 위에서 다루지 못한 중요한 개념/관계를 설명해 주세요.
+## 4. Claude 추출 (claude_extractor.py)
 
-→ 규칙: 선택된 항목을 `seed_ontology`의 대응 노드/관계로 매핑해 **draft 스키마** 생성.
-
-### (b) Claude 보강 (`claude_enricher.py`)
-- 입력: `설문 답변(자유서술 포함) + 현재 draft 스키마 JSON`.
-- 출력: `EnrichmentResponse` (구조화 출력으로 강제).
-- 역할: 누락 노드/관계/속성 제안, 모델링 경고(예: "측정소와 수질항목 사이 관계 누락",
-  "측정값은 측정소·항목·시각을 잇는 별도 노드로 분리 권장").
-- **prompt caching**: 안정 프리픽스(시스템 지침 + 시드 온톨로지 + 도메인 모델링 가이드)
-  와 가변 서픽스(설문 답변 + draft)를 분리. 프리픽스에 `cache_control` 적용.
-- **구현 시 `claude-api` 스킬을 사용해 정확한 SDK 호출 형태(모델 ID, 구조화 출력 방식,
-  캐시 프리픽스 최소 토큰, thinking/effort 옵션)를 확정한다.** 계획 단계에서 API 파라미터를
-  단정하지 않고, 최신 SDK 규약에 맞춰 구현한다. 기본 모델은 `claude-opus-4-8`.
+- 입력: 프로젝트의 지식 문장(+선택적으로 기존 타입/엔티티 힌트로 일관성 유도).
+- 출력(구조화 강제): `{entities, relations, summary}`. free-form dict 회피 위해 전용 출력 스키마로
+  받고 내부 `Extraction`으로 **재검증**(식별자 방어선 통과, 실패분은 드롭/경고).
+- **prompt caching**: 안정 프리픽스(시스템 지침 + 도메인 가이드 `DOMAIN_GUIDE`)에 `cache_control`.
+- **우아한 열화**: 키 없음/실패 시 빈 `Extraction` → 사용자는 수동 입력으로 계속 가능.
+- **비용**: `/extract`가 매 호출 실제 Claude를 부른다(과금). 프론트에 고지.
 
 ## 5. FastAPI 엔드포인트
 
 | 메서드 | 경로 | 요청 | 응답 |
 |---|---|---|---|
-| GET | `/api/survey/questions` | – | 설문 문항 목록 |
-| POST | `/api/suggest` | `{answers}` | `{draft: OntologySchema, enrichment: EnrichmentResponse}` |
-| GET | `/api/schema` | – | 현재 세션 스키마 |
-| PUT | `/api/schema` | `OntologySchema` | 저장된 스키마 (사용자 편집 반영) |
-| POST | `/api/schema/commit` | `OntologySchema` | `{applied_cypher: [...], stats}` — Neo4j 반영 |
-| GET | `/api/graph` | – | `{nodes, links}` (시각화용) |
+| GET | `/api/projects` | – | 프로젝트 목록 |
+| POST | `/api/projects` | `{name, description}` | 생성된 프로젝트 |
+| DELETE | `/api/projects/{id}` | – | `{deleted}` |
+| POST | `/api/projects/{id}/extract` | `{text}` | `Extraction`(미리보기, Claude 호출) |
+| POST | `/api/projects/{id}/ingest` | `Extraction`(편집본) | `{stats, graph}` |
+| GET | `/api/projects/{id}/graph` | – | `{nodes, links}` |
 
-MVP는 인메모리 세션(단일 사용자) 또는 Neo4j `:_Schema` 메타노드에 스키마 저장.
+## 6. Neo4j 반영 (cypher_builder + neo4j_service)
 
-## 6. Neo4j 반영 전략 (`cypher_builder.py` + `neo4j_service.py`)
+- **인젝션 방지(불변식 §3)**: 타입 라벨/관계타입은 `escape_identifier`(재검증+백틱), 값은
+  파라미터. 동적 라벨/관계타입은 **타입별로 그룹핑**해 문 하나당 하나의 (검증된) 식별자만
+  삽입한다(라벨은 UNWIND로 파라미터화 불가하므로).
+- **엔티티 MERGE**: `MERGE (n:_Entity {_project:$pid,_name:row.name})` 후 타입별 `SET n:` + 라벨.
+- **관계 MERGE**: 끝점 엔티티를 먼저 보장(관계 endpoint 중 노드 없는 것은 미분류 stub로 보강)
+  → `MATCH … MERGE (a)-[:관계타입]->(b)`.
+- **원자성**: ingest의 데이터 연산(엔티티/라벨/관계)은 **하나의 관리형 쓰기 트랜잭션**으로
+  묶는다. 스키마 DDL(제약)은 별도 auto-commit(스키마/데이터 혼용 금지 회피).
+- `cypher_builder`는 **순수 함수**(부수효과 없음, 단위테스트 대상).
 
-- **스키마 메타 vs 인스턴스 데이터 분리**: 설계된 스키마 자체는 `:_Schema` 라벨의
-  메타노드로 저장(무엇을 설계했는지 기록). 실제 도메인 인스턴스(개별 저수지 등)는
-  일반 라벨 노드로 별도 관리 (MVP에서는 스키마 반영 + 소량 예시 인스턴스까지).
-- **DDL 생성**: 각 `NodeLabel.key_property`에 대해
-  `CREATE CONSTRAINT ... IF NOT EXISTS FOR (n:Label) REQUIRE n.key IS UNIQUE`,
-  자주 조회되는 속성엔 인덱스.
-- **인젝션 방지**: 라벨/관계타입 등 DDL 식별자는 **화이트리스트 검증 + 백틱** 처리,
-  값 바인딩은 반드시 파라미터(`$param`) 사용. `cypher_builder`는 순수 함수로 만들어
-  단위테스트로 생성 Cypher를 검증.
+## 7. 프론트 화면 (2뷰)
 
-## 7. 프론트 화면 (3단계 스텝퍼)
+1. **ProjectList** — 프로젝트 목록/생성/선택/삭제.
+2. **Workspace** — (a) 누적 지식그래프(`GraphView`, 항상 표시), (b) 지식 입력창 + "추출"
+   버튼(비용 경고), (c) 추출 **미리보기 패널**(엔티티/관계 체크·편집·삭제 → "그래프에 추가").
+   노드 클릭 시 속성/타입 패널.
 
-1. **SurveyWizard** — 설문 문항 렌더링(체크박스/드롭다운/텍스트), 답변 수집 → `/api/suggest`.
-2. **SchemaReview** — 좌: draft 스키마(노드·관계 리스트, 인라인 편집/삭제/추가),
-   우: Claude 제안 카드(수락/거부 버튼, 근거 표시). 확정 시 `/api/schema` PUT → commit.
-3. **GraphView** — `react-force-graph`로 `/api/graph` 결과 시각화(노드 라벨별 색상,
-   관계 타입 라벨, 노드 클릭 시 속성 패널).
+## 8. 도메인 가이드 (seed_ontology.py 재활용)
 
-## 8. 시드 온톨로지 (녹조/수질오염 대응 도메인, `seed_ontology.py`)
-
-**노드 라벨(예)**:
-- `저수지`(명칭, 위치, 저수량), `측정소`(측정소코드, 명칭, 위경도),
-  `수질항목`(항목명, 단위) — 클로로필-a(μg/L), 남조류세포수(cells/mL), T-P, T-N,
-  DO, 수온, pH, COD, BOD,
-- `측정값`(값, 측정시각) — 측정소·항목·시각을 잇는 이벤트 노드,
-- `조류경보`(단계, 발령일, 해제일) — 관심/경계/대발생,
-- `오염원`(유형: 점/비점, 명칭), `대응조치`(조치유형, 시행일),
-- `기관`(기관명, 유형: 유역환경청/지자체/물관리센터).
-
-**관계 타입(예)**:
-- `(:측정소)-[:위치]->(:저수지)`
-- `(:측정소)-[:측정]->(:수질항목)`, `(:측정값)-[:항목]->(:수질항목)`,
-  `(:측정값)-[:관측지점]->(:측정소)`
-- `(:저수지)-[:발령]->(:조류경보)`, `(:조류경보)-[:근거지표]->(:수질항목)`
-- `(:오염원)-[:유입]->(:저수지)`, `(:대응조치)-[:대상]->(:저수지)`
-- `(:기관)-[:관할]->(:저수지)`, `(:기관)-[:시행]->(:대응조치)`
-
-**도메인 실무 반영(조류경보제 기준, 남조류세포수)**: 관심 ≥1,000 / 경계 ≥10,000 /
-대발생 ≥1,000,000 cells/mL. 이 임계값은 시드 데이터/가이드에 주석으로 포함해 Claude
-보강 프롬프트의 프리픽스로도 활용.
+녹조/수질 임계값·개념을 Claude **추출 프롬프트의 도메인 가이드**로 사용. 타입 라벨 예시:
+`현상·생물·제도·경보단계·지표·오염원·대응조치·기관·저수지·측정소`. 조류경보제 임계값(남조류
+세포수): 관심 ≥1,000 / 경계 ≥10,000 / 대발생 ≥1,000,000 cells/mL.
 
 ## 9. 로컬 실행 (PowerShell)
 
 ```powershell
-# 0) Docker Desktop이 꺼져 있으면 먼저 기동 (AutoStart=off) — 데몬 준비까지 대기
-Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-# Neo4j 기동 (neo4j:5-community 이미지 캐시됨 → 즉시 기동)
-cd app; docker compose up -d
-# 1) 백엔드 (.env 준비: ANTHROPIC_API_KEY, NEO4J_*)
-cd backend; python -m venv .venv; .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt; uvicorn app.main:app --reload --port 8000
-# 2) 프론트
-cd ..\frontend; npm install; npm run dev   # http://localhost:5173
+cd app; docker compose up -d                       # Neo4j (이미 캐시된 이미지)
+cd backend; .\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload --port 8000          # http://localhost:8000/docs
+cd ..\frontend; npm install; npm run dev           # http://localhost:5173
 ```
-- 환경변수는 `.env`(gitignore) 로 관리, `.env.example` 제공. `ANTHROPIC_API_KEY`는
-  백엔드에서만 사용(프론트 노출 금지).
+테스트: `& "app\backend\.venv\Scripts\python.exe" -m pytest app\backend`
+(Neo4j 통합 테스트는 `$env:RUN_NEO4J_TESTS=1`로 opt-in.)
 
-## 10. 구현 마일스톤 (순서)
+## 10. 마일스톤 (v2)
 
-- **[x] M0** 스캐폴드: `app/docker-compose.yml`(name/볼륨 분리), `.env.example`, README,
-  `backend/`(requirements + FastAPI `/health`), `frontend/package.json`. Neo4j 5.26 community
-  기동·접속 확인, 기존 스택과 충돌 없음.
-- **[x] M1** `models.py`(OntologySchema 등 + 식별자 인젝션 방어선) + `seed_ontology.py`
-  (8노드/10관계 시드 + `DOMAIN_GUIDE`). 엣지케이스 테스트 포함.
-- **[x] M2** `survey.py`(8문항 + `build_draft` 순수함수, 시드 deep copy) + `routers/survey.py`
-  (`GET /api/survey/questions`) + `routers/schema.py`(`POST /api/suggest`, draft만).
-- **[x] M3** `claude_enricher.py`(구조화 출력 + 캐시 배선 + 우아한 열화) → `/api/suggest`에
-  enrichment 연결. LLM payload는 코어 모델로 재검증(§3/§5).
-- **[ ] M4** `cypher_builder.py` + `neo4j_service.py` + `/api/schema/commit`, `/api/graph`
-  (단위테스트 포함). **neo4j 드라이버 6.x 기준으로 작성.**
-- **[ ] M5** 프론트 `SurveyWizard` → `SchemaReview` → `GraphView` 연결.
-- **[ ] M6** end-to-end 통합 확인 + 다듬기(에러 처리, 로딩 상태).
+- **[x] N1** `models.py`(Entity/Relation/Extraction) + `cypher_builder`(엔티티/관계 MERGE,
+  프로젝트 제약, 타입 그룹핑) + 단위테스트(인젝션·순수성).
+- **[x] N2** `neo4j_service`(프로젝트 CRUD, `ingest`, `fetch_project_graph`) + 통합테스트(opt-in).
+- **[x] N3** `claude_extractor.py`(구조화 출력 + 재검증 + 캐시 + 우아한 열화).
+- **[x] N4** `routers/projects.py`(projects/extract/ingest/graph) + `main.py` 등록.
+- **[x] N5** 프론트 재작성(ProjectList + Workspace + 미리보기 + 누적 GraphView).
+- **[ ] N6** 구 코드 정리(v1 설문/스키마 라우터·`survey.py`·`claude_enricher.py`·스키마-메타
+  cypher/서비스·구 테스트 제거) + 다듬기 → 이후 커밋.
 
-M4는 M1 이후 착수 가능.
+각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 
 ## 검증 (Verification)
 
-end-to-end 스모크 테스트:
-1. (Docker Desktop 기동 후) `cd app; docker compose up -d` → `http://localhost:7474`에서
-   Neo4j 로그인 확인. 다른 실행 중 스택(cvat 등)과 포트(7474/7687)·볼륨 충돌 없는지 확인.
-2. 백엔드 기동 후 `GET /api/survey/questions` 200 확인 (`/docs` Swagger UI 활용).
-3. 프론트에서 설문(예: 저수지+측정소+클로로필-a+조류경보 선택, 자유서술에
-   "측정소마다 매일 수질 측정값이 쌓인다" 입력) → `/api/suggest` 호출 →
-   draft 스키마 + Claude 제안(예: `측정값` 이벤트 노드 분리 제안)이 화면에 표시되는지.
-4. 제안 수락/편집 후 commit → Neo4j 브라우저에서 `CALL db.schema.visualization()`으로
-   제약조건/라벨 생성 확인.
-5. `GraphView`에서 노드·관계가 시각화되는지, 노드 클릭 시 속성 표시되는지.
-- 단위테스트: `cypher_builder`(스키마 JSON→기대 Cypher, 인젝션 방지), `survey` 매핑 규칙.
+1. Neo4j 기동 → 프로젝트 생성 → 지식 문장 입력 → 추출 미리보기 확인 → "그래프에 추가" →
+   GraphView에 노드·관계 누적 → 같은 엔티티 재입력 시 중복 없이 병합되는지.
+2. Neo4j 브라우저(7474): `MATCH (n:_Entity {_project:'<id>'}) RETURN n`.
+3. 단위테스트: cypher_builder(엔티티/관계 MERGE 생성·인젝션), 통합(ingest→graph 왕복·병합 멱등).
 
-## MVP 이후 확장 여지
+## 부록 A. v1(폐기)에서 재사용/제거
 
-사용자 인증/다중 사용자, 스키마 버전 관리·이력, 팀 협업(제안 코멘트),
-대량 인스턴스 데이터 적재, Claude Batches/Files API 활용, 프롬프트 캐시 pre-warm,
-설계 결과 export(Cypher 스크립트/JSON).
+- **재사용**: `neo4j_service` 드라이버·실행·503 열화, `cypher_builder.escape_identifier`·
+  `CypherStatement`, `models`의 식별자 방어선, `GraphView`, `seed_ontology.DOMAIN_GUIDE`.
+- **제거(N6)**: `survey.py`, `routers/survey.py`, `/api/suggest`·`/api/schema*`(위저드),
+  `claude_enricher.py`(→ `claude_extractor`로 대체), 관련 테스트 및 구 프론트 컴포넌트.
+
+## MVP 이후 확장
+
+사용자 인증/권한, 그래프 버전/이력, 추출 규칙 튜닝, 엔티티 병합/별칭 관리, 대량 문서 일괄
+적재, 파생 온톨로지(타입·관계타입 집합) export, 프롬프트 캐시 pre-warm.

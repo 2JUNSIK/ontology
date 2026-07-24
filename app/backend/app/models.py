@@ -56,6 +56,25 @@ def _clean_identifier(value: str, kind: str) -> str:
     return v
 
 
+# 라벨/관계타입은 '_' 프리픽스를 예약한다. cypher_builder가 스키마 메타 저장에 쓰는
+# 내부 식별자(:_Schema, :_SCHEMA_REL 등)와 사용자 라벨/관계타입이 충돌하면, 설계
+# 불변식 §4(스키마 메타 vs 인스턴스 분리)가 무너진다(예: 사용자 라벨 "_Schema"가
+# commit 시 메타 초기화 DETACH DELETE의 대상이 됨). 속성명/키에는 이 제약을 두지 않는다
+# (속성은 메타 그래프의 라벨/관계타입이 아니므로 충돌 표면이 아니다).
+_RESERVED_IDENT_PREFIX = "_"
+
+
+def _clean_label_or_type(value: str, kind: str) -> str:
+    """라벨/관계타입 전용 정제·검증: 공통 정제 + '_' 프리픽스(내부/메타 예약) 거부."""
+    v = _clean_identifier(value, kind)
+    if v.startswith(_RESERVED_IDENT_PREFIX):
+        raise ValueError(
+            f"{kind}은(는) '{_RESERVED_IDENT_PREFIX}'로 시작할 수 없습니다"
+            f"(내부/메타 예약): {value!r}"
+        )
+    return v
+
+
 class PropertyDef(BaseModel):
     """노드/관계의 속성 정의."""
 
@@ -89,7 +108,7 @@ class NodeLabel(BaseModel):
     @field_validator("label")
     @classmethod
     def _v_label(cls, v: str) -> str:
-        return _clean_identifier(v, "라벨(label)")
+        return _clean_label_or_type(v, "라벨(label)")
 
     @field_validator("key_property")
     @classmethod
@@ -125,12 +144,12 @@ class RelationshipType(BaseModel):
     @field_validator("type")
     @classmethod
     def _v_type(cls, v: str) -> str:
-        return _clean_identifier(v, "관계타입(relationship type)")
+        return _clean_label_or_type(v, "관계타입(relationship type)")
 
     @field_validator("start_label", "end_label")
     @classmethod
     def _v_labels(cls, v: str) -> str:
-        return _clean_identifier(v, "관계의 라벨(start/end label)")
+        return _clean_label_or_type(v, "관계의 라벨(start/end label)")
 
     @model_validator(mode="after")
     def _v_props(self) -> "RelationshipType":
@@ -220,4 +239,79 @@ class EnrichmentResponse(BaseModel):
     """Claude 보강 응답 전체."""
 
     suggestions: list[Suggestion] = Field(default_factory=list)
+    summary: str = ""
+
+
+# ==================================================================
+# v2: 지식그래프 표현 (Entity/Relation/Extraction) — PLAN.md §3
+# ==================================================================
+# 핵심 구분:
+#  - **이름/설명은 '값'** → Cypher에 파라미터($param)로만 바인딩된다. 백틱을 허용하되
+#    제어/포맷/구분자 문자는 거부하고 길이만 제한한다(_clean_value).
+#  - **타입 라벨/관계타입은 '식별자'** → Cypher DDL/패턴에 삽입되므로 _clean_label_or_type로
+#    검증(백틱·제어문자·'_' 프리픽스 거부) 후 cypher_builder가 백틱 이스케이프한다.
+
+_MAX_VALUE_LEN = 500
+
+
+def _clean_value(value: str, kind: str, maxlen: int = _MAX_VALUE_LEN) -> str:
+    """엔티티 이름 등 '값' 정제. 파라미터 바인딩되므로 백틱은 허용하되, 제어/포맷/구분자
+    문자는 거부하고 NFC 정규화 + 앞뒤 공백 제거 + 길이 제한을 적용한다."""
+    if not isinstance(value, str):
+        raise ValueError(f"{kind}은(는) 문자열이어야 합니다: {value!r}")
+    v = unicodedata.normalize("NFC", value).strip()
+    if not v:
+        raise ValueError(f"{kind}은(는) 비어 있을 수 없습니다")
+    if any(unicodedata.category(c) in _FORBIDDEN_CATEGORIES for c in v):
+        raise ValueError(f"{kind}에 허용되지 않는 문자(제어/포맷/구분자)가 있습니다: {value!r}")
+    if len(v) > maxlen:
+        raise ValueError(f"{kind}이(가) 너무 깁니다(>{maxlen}): {value!r}")
+    return v
+
+
+class Entity(BaseModel):
+    """지식 노드. 예: (녹조:현상), (관심:경보단계)."""
+
+    name: str  # 값(파라미터 바인딩)
+    type: str = ""  # 타입 라벨(식별자). 비면 미분류
+    description: str = ""
+
+    @field_validator("name")
+    @classmethod
+    def _v_name(cls, v: str) -> str:
+        return _clean_value(v, "엔티티 이름(name)")
+
+    @field_validator("type")
+    @classmethod
+    def _v_type(cls, v: str) -> str:
+        # 비어 있으면 '미분류'로 허용. 값이 있으면 라벨 규칙으로 검증.
+        if not isinstance(v, str) or not v.strip():
+            return ""
+        return _clean_label_or_type(v, "엔티티 타입(type)")
+
+
+class Relation(BaseModel):
+    """지식 관계. 예: (녹조)-[원인]->(남조류)."""
+
+    source: str  # 값(엔티티 이름)
+    target: str  # 값(엔티티 이름)
+    type: str  # 관계타입(식별자) — 필수
+    description: str = ""
+
+    @field_validator("source", "target")
+    @classmethod
+    def _v_endpoints(cls, v: str) -> str:
+        return _clean_value(v, "관계 끝점 이름(source/target)")
+
+    @field_validator("type")
+    @classmethod
+    def _v_type(cls, v: str) -> str:
+        return _clean_label_or_type(v, "관계타입(relationship type)")
+
+
+class Extraction(BaseModel):
+    """Claude 추출 결과(미리보기 및 ingest 요청 공용)."""
+
+    entities: list[Entity] = Field(default_factory=list)
+    relations: list[Relation] = Field(default_factory=list)
     summary: str = ""

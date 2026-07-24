@@ -1,0 +1,35 @@
+# --- Secrets / env ---
+.env
+.env.local
+*.local
+!.env.example
+
+# --- Python (backend) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node (frontend) ---
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+yarn-error.log*
+
+# --- Neo4j / Docker local data (if bind-mounted) ---
+data/
+logs/
+import/
+plugins/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

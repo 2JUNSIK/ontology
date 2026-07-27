@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N10 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N11 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
 백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **N6**에서 구 v1(설문/스키마) 코드를 완전 제거해
@@ -16,16 +16,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **표준 어휘 정규화**(수자원 운영관리 표준 타입/관계 + 별칭→표준명 canonical화 + domain/range 경고,
 순수 후처리 `ontology_normalizer.py`)를, **N10**에서 **정량 속성 구조화**(임계값·대표 수치를
 `value/unit/comparator/observed_at` 노드 속성으로 — 자유 텍스트에 묻지 않고 비교·집계 가능하게)를
-추가했다("실무형 지식그래프 강화" 방향). 다음: 프론트 디자인/기능 확장 계속.
+추가했다("실무형 지식그래프 강화" 방향). **N11**에서 **그래프 시각화를 강화**(degree 비례 노드 크기·
+노드 검색/하이라이트·전체보기(zoomToFit)/재정렬·정량값 amber 링, 순수 프론트 `GraphView.tsx`)했다.
+다음: 프론트 디자인/기능 확장 계속.
 
-> **git 상태(2026-07-27)**: **N1~N8은 main에 머지 완료**(`main`=`origin/main`=`df5c0df` — 문서에
-> 'N8 미머지'로 적혀 있었으나 실제로는 이미 ff 머지됐음을 `rev-parse`로 검증). **N9·N10은
-> `feat-ontology-enrichment`**(표준 어휘 정규화 + 정량 속성)에 커밋됨 — main보다 2커밋 앞, push 후 PR 예정.
-> 머지 끝난 구 브랜치(`feat-graph-query`/`n6-cleanup`/`feat-knowledge-inventory`)는 정리 가능.
-> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-07-27, 실측 정정)**: **N1~N10은 main에 머지·push 완료**(`main`=`origin/main`=`e643362`).
+> 문서에 'N9·N10은 `feat-ontology-enrichment`에 커밋·PR 예정'으로 적혀 있었으나 `git rev-parse` 확인 결과
+> **이미 main에 머지됨**(feat-ontology-enrichment==main==e643362). **N11은 `feat-graph-visualization`**
+> (그래프 시각화 강화)에 커밋 + origin push 완료 — **PR 대기**(웹 링크로 오픈).
+> 머지 끝난 구 브랜치(`feat-graph-query`/`n6-cleanup`/`feat-knowledge-inventory`/`feat-ontology-enrichment`)는
+> 정리 가능. `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
-  API(§5), 마일스톤(N1~N10, §10), "진행 현황"이 모두 여기 있다.
+  API(§5), 마일스톤(N1~N11, §10), "진행 현황"이 모두 여기 있다.
 - **현재 코드**(`app/backend/app/`):
   - [v2 핵심] `models.py`(Entity/Relation/Extraction + 식별자 방어선 + **정량 속성**
     `value/unit/comparator/observed_at`, comparator 화이트리스트·value NaN/Inf/bool 거부·고아 정량 정규화),
@@ -50,7 +53,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     자연어 질의→생성 Cypher 표시→결과 그래프(`GraphView` 재사용)+표(`KnowledgeInventory` `readOnly`
     재사용). `KnowledgeInventory`는 노드·관계 데이터 표 + 개별 삭제(`DELETE /entities`·`/relations`)
     + **10개 초과 시 클라이언트 페이지네이션** + `readOnly` prop(탐색 결과 표 재사용).
-    (구 `SurveyWizard`/`SchemaReview`는 이미 삭제.)
+    `GraphView`(N11 강화)는 controlled·타입별 색상 + **degree 비례 노드 크기** + **오버레이 툴바**
+    (노드 이름 검색→부분일치 하이라이트+나머지 디밍 / 전체 보기 `zoomToFit` / 재정렬 `d3ReheatSimulation`)
+    + **정량값(N10) 노드 amber 링** + 범례 정량값 칩. paint 콜백은 **인라인 유지 필수**(콜백 identity
+    변화가 정적 그래프 재드로우를 트리거 — `useCallback` 금지). auto-fit은 **새 노드 등장 시에만**
+    (순수 삭제는 사용자 줌 보존). (구 `SurveyWizard`/`SchemaReview`는 이미 삭제.)
 - **명령은 실제로 동작**(venv·node_modules 존재). 개발 중 백엔드(uvicorn :8000)·프론트(vite :5173)
   서버가 백그라운드로 떠 있을 수 있다. **백엔드 코드 변경 시 재시작 필요**(--reload 미사용 시 —
   포트 8000 리스너 kill 후 재기동). 프론트는 Vite HMR로 자동 반영.

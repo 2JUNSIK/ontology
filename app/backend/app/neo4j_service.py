@@ -253,3 +253,60 @@ def fetch_project_graph(project_id: str) -> dict[str, list[dict]]:
         for r in rel_res.records
     ]
     return {"nodes": nodes, "links": links}
+
+
+def delete_entity(project_id: str, name: str) -> dict[str, int]:
+    """프로젝트 내 이름=name 엔티티를 삭제한다(연결된 관계도 DETACH DELETE로 함께 제거).
+
+    값(project_id·name)은 전부 파라미터 바인딩 → 인젝션 표면 없음. 관리형 쓰기 트랜잭션.
+    """
+    driver = get_driver()
+    try:
+        with driver.session(database=_DATABASE) as session:
+
+            def _del(tx):
+                return (
+                    tx.run(
+                        f"MATCH (n:`{ENTITY_BASE_LABEL}` {{_project: $pid, _name: $name}}) "
+                        "DETACH DELETE n",
+                        {"pid": project_id, "name": name},
+                    )
+                    .consume()
+                    .counters
+                )
+
+            c = session.execute_write(_del)
+    except ServiceUnavailable as e:
+        logger.warning("Neo4j 연결 불가(delete_entity): %s", type(e).__name__)
+        raise Neo4jUnavailable(str(e)) from e
+    return {"nodes_deleted": c.nodes_deleted, "relationships_deleted": c.relationships_deleted}
+
+
+def delete_relation(project_id: str, source: str, target: str, rel_type: str) -> dict[str, int]:
+    """프로젝트 내 (source)-[rel_type]->(target) 관계 1개를 삭제한다.
+
+    관계타입은 `type(r) = $rtype` 로 비교해 **동적 식별자를 Cypher에 넣지 않는다**(값·이름과
+    함께 전부 파라미터 바인딩 → 인젝션 표면 제거). 끝점 노드는 남기고 관계만 삭제한다.
+    """
+    driver = get_driver()
+    try:
+        with driver.session(database=_DATABASE) as session:
+
+            def _del(tx):
+                return (
+                    tx.run(
+                        f"MATCH (a:`{ENTITY_BASE_LABEL}` {{_project: $pid, _name: $source}})"
+                        f"-[r]->(b:`{ENTITY_BASE_LABEL}` {{_project: $pid, _name: $target}}) "
+                        "WHERE type(r) = $rtype "
+                        "DELETE r",
+                        {"pid": project_id, "source": source, "target": target, "rtype": rel_type},
+                    )
+                    .consume()
+                    .counters
+                )
+
+            c = session.execute_write(_del)
+    except ServiceUnavailable as e:
+        logger.warning("Neo4j 연결 불가(delete_relation): %s", type(e).__name__)
+        raise Neo4jUnavailable(str(e)) from e
+    return {"relationships_deleted": c.relationships_deleted}

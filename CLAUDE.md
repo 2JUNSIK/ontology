@@ -22,7 +22,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     `models.py`의 v1 모델(OntologySchema/NodeLabel/…)·`seed_ontology.SEED_ONTOLOGY`를 모두 삭제.
     **`seed_ontology.py`의 `DOMAIN_GUIDE`(+임계값·수질항목 상수)는 extractor가 재사용하므로 유지.**
   - 프론트(`app/frontend/src/`): `App.tsx`, `api.ts`, `types.ts`,
-    `components/{ProjectList,Workspace,ExtractionPreview,GraphView}.tsx`. (구 `SurveyWizard`/
+    `components/{ProjectList,Workspace,ExtractionPreview,KnowledgeInventory,GraphView}.tsx`.
+    Workspace는 **세로 스택**(지식 입력 → 지식 현황 → 지식 그래프). `KnowledgeInventory`는 노드·
+    관계 데이터 표 + 개별 삭제(백엔드 `DELETE /entities`·`/relations`). (구 `SurveyWizard`/
     `SchemaReview`는 이미 삭제.)
 - **명령은 실제로 동작**(venv·node_modules 존재). 개발 중 백엔드(uvicorn :8000)·프론트(vite :5173)
   서버가 백그라운드로 떠 있을 수 있다. **백엔드 코드 변경 시 재시작 필요**(--reload 미사용 시 —

@@ -124,6 +124,11 @@ class Extraction(BaseModel):   # Claude 추출 결과(미리보기/ingest 공용
 | POST | `/api/projects/{id}/extract` | `{text}` | `Extraction`(미리보기, Claude 호출) |
 | POST | `/api/projects/{id}/ingest` | `Extraction`(편집본) | `{stats, graph}` |
 | GET | `/api/projects/{id}/graph` | – | `{nodes, links}` |
+| DELETE | `/api/projects/{id}/entities` | `{name}` | `{stats, graph}` (노드+연결관계 삭제) |
+| DELETE | `/api/projects/{id}/relations` | `{source, target, type}` | `{stats, graph}` (관계만 삭제) |
+
+삭제 값(이름·관계타입)은 ingest와 동일하게 정제(NFC+trim, `_clean_value`/`_clean_label_or_type`)해
+저장된 `_name`과 매칭한다. 관계타입은 `type(r)=$rtype` 값 비교 → 동적 식별자 미삽입(인젝션 안전).
 
 ## 6. Neo4j 반영 (cypher_builder + neo4j_service)
 
@@ -140,9 +145,12 @@ class Extraction(BaseModel):   # Claude 추출 결과(미리보기/ingest 공용
 ## 7. 프론트 화면 (2뷰)
 
 1. **ProjectList** — 프로젝트 목록/생성/선택/삭제.
-2. **Workspace** — (a) 누적 지식그래프(`GraphView`, 항상 표시), (b) 지식 입력창 + "추출"
-   버튼(비용 경고), (c) 추출 **미리보기 패널**(엔티티/관계 체크·편집·삭제 → "그래프에 추가").
-   노드 클릭 시 속성/타입 패널.
+2. **Workspace** — **세로 스택**(전체 폭, 같은 너비):
+   - (a) **지식 입력** — 입력창 + "추출" 버튼(비용 경고) + 추출 **미리보기 패널**
+     (`ExtractionPreview`: 엔티티/관계 체크·편집·삭제 → "그래프에 추가").
+   - (b) **지식 현황**(`KnowledgeInventory`) — 노드·관계를 **데이터 표**로 관리, 행별 **개별 삭제**
+     (노드 삭제 시 연결 관계도 함께 제거 — 확인 다이얼로그). 삭제 결과(0건 포함) 안내.
+   - (c) **지식 그래프**(`GraphView`, 항상 표시) — 노드 클릭 시 속성/타입 패널.
 
 ## 8. 도메인 가이드 (seed_ontology.py 재활용)
 

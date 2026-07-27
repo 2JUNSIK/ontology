@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
-import { errMessage, extractKnowledge, getProjectGraph, ingestExtraction } from "../api";
+import {
+  deleteEntity,
+  deleteRelation,
+  errMessage,
+  extractKnowledge,
+  getProjectGraph,
+  ingestExtraction,
+} from "../api";
 import type { Extraction, GraphData, Project } from "../types";
 import ExtractionPreview from "./ExtractionPreview";
 import GraphView from "./GraphView";
+import KnowledgeInventory, { entKey, relKey } from "./KnowledgeInventory";
 
 interface Props {
   project: Project;
@@ -21,6 +29,8 @@ export default function Workspace({ project, onBack }: Props) {
   const [loadingGraph, setLoadingGraph] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [ingesting, setIngesting] = useState(false);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [deleteMsg, setDeleteMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadGraph() {
@@ -88,6 +98,57 @@ export default function Workspace({ project, onBack }: Props) {
     }
   }
 
+  async function handleDeleteEntity(name: string) {
+    if (deletingKey) return; // 진행 중 이중 클릭 방지
+    if (
+      !window.confirm(
+        `'${name}' 노드를 삭제할까요?\n이 노드에 연결된 관계도 함께 사라집니다.`,
+      )
+    )
+      return;
+    setDeletingKey(entKey(name));
+    setError(null);
+    setIngestMsg(null);
+    setDeleteMsg(null);
+    try {
+      const res = await deleteEntity(project.id, name);
+      setGraph(res.graph);
+      const n = (res.stats?.nodes_deleted ?? 0) as number;
+      setDeleteMsg(
+        n > 0
+          ? { ok: true, text: `'${name}' 노드를 삭제했습니다.` }
+          : { ok: false, text: `'${name}'과(와) 일치하는 노드가 없어 삭제되지 않았습니다.` },
+      );
+    } catch (e) {
+      setError(errMessage(e));
+    } finally {
+      setDeletingKey(null);
+    }
+  }
+
+  async function handleDeleteRelation(source: string, target: string, type: string) {
+    if (deletingKey) return;
+    if (!window.confirm(`관계 (${source})-[${type}]→(${target}) 를 삭제할까요?`)) return;
+    setDeletingKey(relKey(source, type, target));
+    setError(null);
+    setIngestMsg(null);
+    setDeleteMsg(null);
+    try {
+      const res = await deleteRelation(project.id, source, target, type);
+      setGraph(res.graph);
+      const n = (res.stats?.relationships_deleted ?? 0) as number;
+      setDeleteMsg(
+        n > 0
+          ? { ok: true, text: `관계 (${source})-[${type}]→(${target}) 를 삭제했습니다.` }
+          : { ok: false, text: `일치하는 관계가 없어 삭제되지 않았습니다.` },
+      );
+    } catch (e) {
+      setError(errMessage(e));
+    } finally {
+      setDeletingKey(null);
+    }
+  }
+
   return (
     <div>
       <div className="ws-head">
@@ -105,25 +166,8 @@ export default function Workspace({ project, onBack }: Props) {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="workspace-grid">
-        {/* 좌: 누적 지식그래프 */}
-        <div className="panel graph-panel">
-          <div className="row between" style={{ marginBottom: 16 }}>
-            <h2 className="section-title">지식그래프</h2>
-            <button className="mini" onClick={loadGraph} disabled={loadingGraph}>
-              새로고침
-            </button>
-          </div>
-          {loadingGraph ? (
-            <div className="graph-wrap">
-              <div className="center-msg">불러오는 중…</div>
-            </div>
-          ) : (
-            <GraphView data={graph} />
-          )}
-        </div>
-
-        {/* 우: 지식 입력 + 추출 미리보기 */}
+      <div className="workspace-stack">
+        {/* 1. 지식 입력 */}
         <div>
           <div className="panel">
             <h2 className="section-title">지식 입력</h2>
@@ -169,6 +213,52 @@ export default function Workspace({ project, onBack }: Props) {
               onCancel={() => setExtraction(null)}
               onConfirm={handleIngest}
             />
+          )}
+        </div>
+
+        {/* 2. 지식 현황 (데이터 관리 + 삭제) */}
+        <div className="panel">
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <div>
+              <h2 className="section-title">지식 현황</h2>
+              <p className="section-desc">노드와 관계를 데이터로 관리합니다. 개별로 삭제할 수 있어요.</p>
+            </div>
+            <button className="mini" onClick={loadGraph} disabled={loadingGraph}>
+              새로고침
+            </button>
+          </div>
+          {deleteMsg && (
+            <div className={"notice" + (deleteMsg.ok ? " success" : "")} style={{ marginBottom: 14 }}>
+              {deleteMsg.ok ? "✓ " : "⚠ "}
+              {deleteMsg.text}
+            </div>
+          )}
+          {loadingGraph ? (
+            <div className="kg-empty">불러오는 중…</div>
+          ) : (
+            <KnowledgeInventory
+              data={graph}
+              busyKey={deletingKey}
+              onDeleteEntity={handleDeleteEntity}
+              onDeleteRelation={handleDeleteRelation}
+            />
+          )}
+        </div>
+
+        {/* 3. 지식 그래프 */}
+        <div className="panel graph-panel">
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <h2 className="section-title">지식 그래프</h2>
+            <button className="mini" onClick={loadGraph} disabled={loadingGraph}>
+              새로고침
+            </button>
+          </div>
+          {loadingGraph ? (
+            <div className="graph-wrap">
+              <div className="center-msg">불러오는 중…</div>
+            </div>
+          ) : (
+            <GraphView data={graph} />
           )}
         </div>
       </div>

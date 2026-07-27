@@ -134,3 +134,118 @@ def test_api_extract_no_key_degrades(project):
     )
     assert r.status_code == 200
     assert r.json()["entities"] == []
+
+
+def test_delete_entity_cascades_relations(project):
+    from app import neo4j_service
+
+    neo4j_service.ingest(project["id"], _ext())
+    res = neo4j_service.delete_entity(project["id"], "녹조")
+    assert res["nodes_deleted"] == 1
+    assert res["relationships_deleted"] >= 2  # 녹조가 양끝이던 관계도 함께 삭제
+    g = neo4j_service.fetch_project_graph(project["id"])
+    assert "녹조" not in {n["name"] for n in g["nodes"]}
+    assert g["links"] == []  # 남은 관계 없음
+
+
+def test_delete_relation_keeps_endpoints(project):
+    from app import neo4j_service
+
+    neo4j_service.ingest(project["id"], _ext())
+    res = neo4j_service.delete_relation(project["id"], "녹조", "남조류", "원인")
+    assert res["relationships_deleted"] == 1
+    g = neo4j_service.fetch_project_graph(project["id"])
+    assert {"녹조", "남조류"} <= {n["name"] for n in g["nodes"]}  # 끝점 노드는 유지
+    assert all(
+        not (l["source"] == "녹조" and l["target"] == "남조류" and l["type"] == "원인")
+        for l in g["links"]
+    )
+
+
+def test_delete_relation_wrong_type_is_noop(project):
+    from app import neo4j_service
+
+    neo4j_service.ingest(project["id"], _ext())
+    res = neo4j_service.delete_relation(project["id"], "녹조", "남조류", "없는타입")
+    assert res["relationships_deleted"] == 0  # 타입 불일치 → 아무것도 지우지 않음
+
+
+def test_api_delete_entity_and_relation(project):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    pid = project["id"]
+    client.post(f"/api/projects/{pid}/ingest", json=_ext().model_dump())
+
+    r = client.request(
+        "DELETE",
+        f"/api/projects/{pid}/relations",
+        json={"source": "녹조", "target": "남조류", "type": "원인"},
+    )
+    assert r.status_code == 200, r.text
+    assert all(
+        not (l["source"] == "녹조" and l["type"] == "원인") for l in r.json()["graph"]["links"]
+    )
+
+    r2 = client.request("DELETE", f"/api/projects/{pid}/entities", json={"name": "남조류"})
+    assert r2.status_code == 200, r2.text
+    assert "남조류" not in {n["name"] for n in r2.json()["graph"]["nodes"]}
+
+
+def test_delete_entity_with_untrimmed_name_still_matches(project):
+    # SHOULD-1 회귀 가드: API가 이름을 ingest와 동일하게 정제(trim/NFC)하므로 공백이 붙어도 삭제됨.
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    neo4j_service_client = TestClient(app)
+    pid = project["id"]
+    neo4j_service_client.post(f"/api/projects/{pid}/ingest", json=_ext().model_dump())
+    r = neo4j_service_client.request(
+        "DELETE", f"/api/projects/{pid}/entities", json={"name": "  녹조  "}
+    )
+    assert r.status_code == 200, r.text
+    assert "녹조" not in {n["name"] for n in r.json()["graph"]["nodes"]}
+
+
+def test_delete_self_loop_relation(project):
+    from app import neo4j_service
+    from app.models import Extraction, Relation
+
+    ext = Extraction(relations=[Relation(source="저수지", type="인접", target="저수지")])
+    neo4j_service.ingest(project["id"], ext)
+    res = neo4j_service.delete_relation(project["id"], "저수지", "저수지", "인접")
+    assert res["relationships_deleted"] == 1
+    g = neo4j_service.fetch_project_graph(project["id"])
+    assert "저수지" in {n["name"] for n in g["nodes"]}  # 노드는 유지
+    assert g["links"] == []
+
+
+def test_delete_relation_reverse_direction_is_noop(project):
+    from app import neo4j_service
+
+    neo4j_service.ingest(project["id"], _ext())  # (녹조)-[원인]->(남조류)
+    res = neo4j_service.delete_relation(project["id"], "남조류", "녹조", "원인")  # 방향 반대
+    assert res["relationships_deleted"] == 0
+    g = neo4j_service.fetch_project_graph(project["id"])
+    assert any(
+        l["source"] == "녹조" and l["target"] == "남조류" and l["type"] == "원인"
+        for l in g["links"]
+    )  # 원래 관계 유지
+
+
+def test_delete_entity_isolated_across_projects(project):
+    from app import neo4j_service
+
+    other = neo4j_service.create_project("IT_격리삭제", "")
+    try:
+        neo4j_service.ingest(project["id"], _ext())
+        neo4j_service.ingest(other["id"], _ext())
+        neo4j_service.delete_entity(project["id"], "녹조")
+        # 다른 프로젝트의 동명 노드는 살아있어야 함
+        g_other = neo4j_service.fetch_project_graph(other["id"])
+        assert "녹조" in {n["name"] for n in g_other["nodes"]}
+    finally:
+        neo4j_service.delete_project(other["id"])

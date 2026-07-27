@@ -9,14 +9,16 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..claude_extractor import extract
-from ..models import Extraction
+from ..models import Extraction, _clean_label_or_type, _clean_value
 from ..neo4j_service import (
     Neo4jUnavailable,
     create_project,
+    delete_entity,
     delete_project,
+    delete_relation,
     fetch_project_graph,
     get_project,
     ingest,
@@ -38,6 +40,37 @@ class ExtractRequest(BaseModel):
 class IngestResponse(BaseModel):
     stats: dict[str, Any]
     graph: dict[str, Any]
+
+
+class EntityRef(BaseModel):
+    """엔티티(노드) 삭제 요청. 이름은 ingest(`Entity.name`)와 **동일하게 정제**(NFC+trim,
+    제어/포맷/구분자 거부)해야 저장된 `_name`과 일치한다 — 정규화 불일치로 인한 '조용한
+    무삭제'를 막는다."""
+
+    name: str = Field(min_length=1)
+
+    @field_validator("name")
+    @classmethod
+    def _v_name(cls, v: str) -> str:
+        return _clean_value(v, "엔티티 이름(name)")
+
+
+class RelationRef(BaseModel):
+    """관계 삭제 요청. source/target은 값, type은 관계타입 식별자로 ingest와 동일하게 정제."""
+
+    source: str = Field(min_length=1)
+    target: str = Field(min_length=1)
+    type: str = Field(min_length=1)
+
+    @field_validator("source", "target")
+    @classmethod
+    def _v_endpoints(cls, v: str) -> str:
+        return _clean_value(v, "관계 끝점 이름(source/target)")
+
+    @field_validator("type")
+    @classmethod
+    def _v_type(cls, v: str) -> str:
+        return _clean_label_or_type(v, "관계타입(relationship type)")
 
 
 def _svc(fn: Callable, *args, **kwargs):
@@ -97,3 +130,21 @@ def get_graph(project_id: str) -> dict:
     """프로젝트 지식그래프({nodes, links})."""
     _require_project(project_id)
     return _svc(fetch_project_graph, project_id)
+
+
+@router.delete("/{project_id}/entities", response_model=IngestResponse)
+def delete_entity_route(project_id: str, ref: EntityRef) -> IngestResponse:
+    """지식 현황에서 노드 1개 삭제(연결된 관계도 함께 제거). 갱신된 그래프를 반환."""
+    _require_project(project_id)
+    stats = _svc(delete_entity, project_id, ref.name)
+    graph = _svc(fetch_project_graph, project_id)
+    return IngestResponse(stats=stats, graph=graph)
+
+
+@router.delete("/{project_id}/relations", response_model=IngestResponse)
+def delete_relation_route(project_id: str, ref: RelationRef) -> IngestResponse:
+    """지식 현황에서 관계 1개 삭제(끝점 노드는 유지). 갱신된 그래프를 반환."""
+    _require_project(project_id)
+    stats = _svc(delete_relation, project_id, ref.source, ref.target, ref.type)
+    graph = _svc(fetch_project_graph, project_id)
+    return IngestResponse(stats=stats, graph=graph)

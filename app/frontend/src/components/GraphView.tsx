@@ -61,7 +61,7 @@ export default function GraphView({ data }: Props) {
       {graphData.nodes.length === 0 ? (
         <div className="center-msg">
           <div>아직 지식이 없습니다.</div>
-          <div className="muted">오른쪽에 지식을 입력하고 “추출 → 그래프에 추가”를 해보세요.</div>
+          <div className="muted">위쪽 “지식 입력”에서 문장을 넣고 “추출 → 그래프에 추가”를 해보세요.</div>
         </div>
       ) : (
         <>

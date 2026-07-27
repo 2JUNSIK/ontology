@@ -412,16 +412,76 @@ input[type="checkbox"] {
   margin: 10px 0 2px;
 }
 
-.workspace-grid {
-  display: grid;
-  grid-template-columns: 1.55fr 1fr;
+/* 세로 스택: 지식 입력 → 지식 현황 → 지식 그래프 (모두 전체 폭, 같은 너비) */
+.workspace-stack {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
-  align-items: start;
 }
-@media (max-width: 1000px) {
-  .workspace-grid {
-    grid-template-columns: 1fr;
-  }
+
+/* ===================== 지식 현황(데이터 표) ===================== */
+.kg-inv {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+.kg-inv h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.kg-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.kg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.kg-table th,
+.kg-table td {
+  text-align: left;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.kg-table thead th {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+.kg-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.kg-table tbody tr:hover {
+  background: var(--surface-2);
+}
+.kg-table tr.row-busy {
+  opacity: 0.5;
+}
+.kg-table td.actions,
+.kg-table th.actions {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+.kg-desc {
+  color: var(--text-2);
+  max-width: 420px;
+}
+.kg-empty {
+  color: var(--text-3);
+  font-size: 14px;
+  padding: 10px 0;
+}
+.badge.rel {
+  background: var(--bg-subtle);
+  color: var(--text-2);
 }
 
 /* ===================== 그래프 ===================== */

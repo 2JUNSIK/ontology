@@ -49,6 +49,29 @@ export async function getProjectGraph(projectId: string): Promise<GraphData> {
   return data;
 }
 
+// 노드 1개 삭제(연결된 관계도 함께 제거). 갱신된 그래프를 돌려받는다.
+export async function deleteEntity(projectId: string, name: string): Promise<IngestResponse> {
+  const { data } = await client.delete<IngestResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/entities`,
+    { data: { name } },
+  );
+  return data;
+}
+
+// 관계 1개 삭제(끝점 노드는 유지). 갱신된 그래프를 돌려받는다.
+export async function deleteRelation(
+  projectId: string,
+  source: string,
+  target: string,
+  type: string,
+): Promise<IngestResponse> {
+  const { data } = await client.delete<IngestResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/relations`,
+    { data: { source, target, type } },
+  );
+  return data;
+}
+
 // axios 오류를 사람이 읽는 메시지로 변환(백엔드 detail 우선).
 export function errMessage(e: unknown): string {
   if (axios.isAxiosError(e)) {

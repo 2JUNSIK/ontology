@@ -4,18 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N6 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N7 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
-백엔드+프론트 재작성이 끝나 end-to-end 동작하며, **N6에서 구 v1(설문/스키마) 코드를 완전 제거**해
-코드베이스가 v2만 남았다. 다음 작업은 프론트 디자인/기능 확장.
+백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **N6**에서 구 v1(설문/스키마) 코드를 완전 제거해
+코드베이스가 v2만 남았고, **N7**에서 "지식 현황"(노드·관계 데이터 표 + 개별 삭제 + 10개/페이지
+페이지네이션)과 세로 레이아웃(지식 입력→지식 현황→지식 그래프)을 추가했다. 다음: 프론트 디자인/기능 확장 계속.
+
+> **git 상태**: N6·N7은 각각 피처 브랜치에 있고 **아직 main 미머지**다. `main`=origin/main(구
+> 상태), `n6-cleanup`(N6 커밋), `feat-knowledge-inventory`(N7 = 지식 현황+세로 레이아웃+삭제+
+> 페이지네이션, n6-cleanup 위에 스택). `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. 권장
+> 머지 순서: n6-cleanup → feat-knowledge-inventory. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
-  API(§5), 마일스톤(N1~N6, §10), "진행 현황"이 모두 여기 있다.
+  API(§5), 마일스톤(N1~N7, §10), "진행 현황"이 모두 여기 있다.
 - **현재 코드**(`app/backend/app/`):
   - [v2 핵심] `models.py`(Entity/Relation/Extraction + 식별자 방어선), `cypher_builder.py`
     (`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`), `neo4j_service.py`
-    (프로젝트 CRUD·`ingest`·`fetch_project_graph`), `claude_extractor.py`, `routers/projects.py`,
+    (프로젝트 CRUD·`ingest`·`fetch_project_graph`·`delete_entity`·`delete_relation`),
+    `claude_extractor.py`, `routers/projects.py`(+ `DELETE /entities`·`/relations`),
     `config.py`, `main.py`.
   - [v1 제거 완료(N6)] `survey.py`·`claude_enricher.py`·`routers/{survey,schema,graph}.py`·
     `cypher_builder`의 스키마-메타 함수·`neo4j_service`의 `commit_schema`/`fetch_graph`·
@@ -24,12 +31,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - 프론트(`app/frontend/src/`): `App.tsx`, `api.ts`, `types.ts`,
     `components/{ProjectList,Workspace,ExtractionPreview,KnowledgeInventory,GraphView}.tsx`.
     Workspace는 **세로 스택**(지식 입력 → 지식 현황 → 지식 그래프). `KnowledgeInventory`는 노드·
-    관계 데이터 표 + 개별 삭제(백엔드 `DELETE /entities`·`/relations`). (구 `SurveyWizard`/
-    `SchemaReview`는 이미 삭제.)
+    관계 데이터 표 + 개별 삭제(백엔드 `DELETE /entities`·`/relations`) + **10개 초과 시 클라이언트
+    페이지네이션**. (구 `SurveyWizard`/`SchemaReview`는 이미 삭제.)
 - **명령은 실제로 동작**(venv·node_modules 존재). 개발 중 백엔드(uvicorn :8000)·프론트(vite :5173)
   서버가 백그라운드로 떠 있을 수 있다. **백엔드 코드 변경 시 재시작 필요**(--reload 미사용 시 —
   포트 8000 리스너 kill 후 재기동). 프론트는 Vite HMR로 자동 반영.
-- **테스트 63 passed / 7 skipped**(통합은 opt-in). GitHub <https://github.com/2JUNSIK/ontology.git>
+- **테스트 72 passed / 15 skipped**(통합은 opt-in). GitHub <https://github.com/2JUNSIK/ontology.git>
   (main 브랜치). Windows 11 + PowerShell.
 
 ### 마일스톤마다 지키는 작업 방식 (사용자 상시 지시)

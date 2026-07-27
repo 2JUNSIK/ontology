@@ -35,17 +35,24 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 
 ## 진행 현황 (2026-07-27 기준)
 
-**완료: N1~N6** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거, end-to-end 동작 확인).
-**다음: 프론트 디자인/기능 확장.**
+**완료: N1~N7** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리).
+end-to-end 동작 확인. **다음: 프론트 디자인/기능 확장 계속.**
+
+> **git 상태**: N6·N7은 각각 피처 브랜치에 있고 **아직 main 미머지**다. `main`=origin/main(구
+> 상태), `n6-cleanup`(N6 커밋), `feat-knowledge-inventory`(N7 = 지식 현황+세로 레이아웃+삭제+
+> 페이지네이션, n6-cleanup 위에 스택). `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. 권장
+> 머지 순서: n6-cleanup → feat-knowledge-inventory.
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
-  `neo4j_service.py`(프로젝트 CRUD·`ingest`·`fetch_project_graph`), `claude_extractor.py`,
-  `routers/projects.py`. `main.py`에 projects 라우터 등록.
-- **프론트**: `App.tsx`(프로젝트 목록↔작업공간), `ProjectList`, `Workspace`(누적 그래프+지식
-  입력+추출 미리보기 오케스트레이션), `ExtractionPreview`(편집/선택 후 ingest), `GraphView`
+  `neo4j_service.py`(프로젝트 CRUD·`ingest`·`fetch_project_graph`·`delete_entity`·`delete_relation`),
+  `claude_extractor.py`, `routers/projects.py`(projects/extract/ingest/graph + DELETE
+  entities/relations). `main.py`에 projects 라우터 등록.
+- **프론트**: `App.tsx`(프로젝트 목록↔작업공간), `ProjectList`, `Workspace`(**세로 스택**:
+  지식 입력→지식 현황→지식 그래프 오케스트레이션), `ExtractionPreview`(편집/선택 후 ingest),
+  `KnowledgeInventory`(노드·관계 데이터 표 + 개별 삭제 + 10개/페이지 페이지네이션), `GraphView`
   (controlled, 타입별 색상). 구 `SurveyWizard`/`SchemaReview`는 삭제.
-- **테스트**: 63 passed / 7 skipped(통합 opt-in). 통합 7개는 실 Neo4j(`RUN_NEO4J_TESTS=1`)로
+- **테스트**: 72 passed / 15 skipped(통합 opt-in). 통합 15개는 실 Neo4j(`RUN_NEO4J_TESTS=1`)로
   별도 전부 통과. 프론트 `tsc --noEmit` 0 에러.
 - **적대적 검수 완료**(백엔드·프론트 각각): 백엔드 **must-fix 없음**(인젝션·원자성·프로젝트
   격리·503·모델 재검증 라이브 통과) + LOW 3건 반영(관계 중복 제거·stub 설명 `''` 정규화·
@@ -56,6 +63,12 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
   NodeLabel/…), `cypher_builder`의 스키마-메타 함수, `neo4j_service`의 `commit_schema`/`fetch_graph`,
   대응 테스트를 모두 삭제. `DOMAIN_GUIDE`(+상수)와 공유 인젝션 방어선은 유지. 방어선 테스트는
   v2 Entity/Relation 기준으로 재작성해 커버리지 보존.
+- **지식 현황(데이터 관리) 완료**(N7): `DELETE /api/projects/{id}/entities`(노드+연결관계
+  DETACH)·`/relations`(관계만) 추가 — 값은 파라미터 바인딩, 관계타입은 `type(r)=$rtype` 값비교로
+  인젝션 안전, 삭제 요청모델은 ingest와 동일 정제(NFC+trim)해 '조용한 무삭제' 방지. 프론트는
+  좌우 2컬럼→**세로 스택** 재구성, `KnowledgeInventory` 표에서 개별 삭제(0건 안내 포함) + 10개
+  초과 시 클라이언트 페이지네이션. 적대적 검수 must-fix 없음(인젝션·프로젝트 격리·프론트 뮤테이션
+  안전, SHOULD/LOW 반영).
 
 ## 1. 아키텍처 & 데이터 흐름
 
@@ -179,6 +192,9 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
 - **[x] N5** 프론트 재작성(ProjectList + Workspace + 미리보기 + 누적 GraphView).
 - **[x] N6** 구 코드 정리(v1 설문/스키마 라우터·`survey.py`·`claude_enricher.py`·스키마-메타
   cypher/서비스·v1 모델·구 테스트 제거) + 다듬기 → 커밋. 방어선 테스트는 v2 모델 기준 재작성.
+- **[x] N7** 지식 현황(데이터 관리) — 노드·관계 표 + 개별 삭제(`delete_entity`/`delete_relation`,
+  `DELETE /entities`·`/relations`, 인젝션 안전) + 좌우→세로 레이아웃 재구성 + 클라이언트
+  페이지네이션(10개/페이지). 통합/검증 테스트 추가, 적대적 검수 통과.
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

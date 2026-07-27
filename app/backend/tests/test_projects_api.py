@@ -88,3 +88,16 @@ def test_relation_ref_type_rejects_backtick_and_underscore():
         RelationRef(source="A", target="B", type="원인`")
     with pytest.raises(ValidationError):
         RelationRef(source="A", target="B", type="_원인")
+
+
+# ---- N9 /extract 응답 계약(ExtractResponse) 회귀 가드 : Neo4j 불필요 ----
+
+
+def test_extract_response_shape():
+    """POST /extract는 {extraction, warnings}로 래핑된다. warnings 기본값은 빈 리스트."""
+    from app.models import Extraction
+    from app.routers.projects import ExtractResponse
+
+    r = ExtractResponse(extraction=Extraction(), warnings=["경고"])
+    assert r.extraction.entities == [] and r.warnings == ["경고"]
+    assert ExtractResponse(extraction=Extraction()).warnings == []

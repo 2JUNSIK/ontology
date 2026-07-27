@@ -30,6 +30,13 @@ export interface Extraction {
   summary: string;
 }
 
+// 추출 미리보기 응답. backend routers/projects.ExtractResponse 와 1:1.
+// extraction=편집·ingest 대상, warnings=domain/range 등 정규화 검증 경고(관계는 삭제되지 않음).
+export interface ExtractResponse {
+  extraction: Extraction;
+  warnings: string[];
+}
+
 // ---- 그래프 시각화(/api/projects/{id}/graph) ----
 export interface GraphNodeData {
   id: string; // = name (프로젝트 내 고유)

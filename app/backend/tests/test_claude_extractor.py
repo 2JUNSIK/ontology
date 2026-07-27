@@ -57,3 +57,21 @@ def test_to_internal_preserves_valid_type_and_desc():
     assert ext.entities[0].type == "경보단계"
     assert ext.entities[0].description == "1000 이상"
     assert ext.summary == "요약"
+
+
+def test_to_internal_canonicalizes_aliases():
+    """_to_internal이 표준 어휘 정규화(별칭→표준명, 타입 별칭, 관계 끝점)를 적용한다."""
+    out = _ExtractionOut(
+        entities=[
+            _EntityOut(name="조류대발생", type="현상"),
+            _EntityOut(name="총인", type="관측소"),  # 이름 별칭 총인→T-P, 타입 별칭 관측소→측정소
+        ],
+        relations=[_RelationOut(source="조류대발생", type="원인", target="남조류")],
+    )
+    ext = _to_internal(out)
+    names = {e.name for e in ext.entities}
+    assert "녹조" in names and "조류대발생" not in names  # 이름 별칭 접힘
+    assert "T-P" in names
+    assert ext.relations[0].source == "녹조"  # 관계 끝점도 표준명
+    tp = next(e for e in ext.entities if e.name == "T-P")
+    assert tp.type == "측정소"  # 타입 별칭 접힘

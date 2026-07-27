@@ -1,6 +1,13 @@
 // 백엔드(FastAPI, :8000) 클라이언트. 엔드포인트는 PLAN.md §5 참조 (v2).
 import axios from "axios";
-import type { Extraction, GraphData, IngestResponse, Project, QueryResponse } from "./types";
+import type {
+  ExtractResponse,
+  Extraction,
+  GraphData,
+  IngestResponse,
+  Project,
+  QueryResponse,
+} from "./types";
 
 const BASE_URL = "http://localhost:8000";
 
@@ -23,8 +30,9 @@ export async function deleteProject(id: string): Promise<{ entities_deleted: num
 }
 
 // 주의: 실제 Claude API를 호출한다(키가 있으면 과금). 호출 측에서 사용자에게 고지할 것.
-export async function extractKnowledge(projectId: string, text: string): Promise<Extraction> {
-  const { data } = await client.post<Extraction>(
+// 반환: { extraction, warnings } — warnings는 domain/range 등 검증 경고(미리보기에 노출).
+export async function extractKnowledge(projectId: string, text: string): Promise<ExtractResponse> {
+  const { data } = await client.post<ExtractResponse>(
     `/api/projects/${encodeURIComponent(projectId)}/extract`,
     { text },
   );

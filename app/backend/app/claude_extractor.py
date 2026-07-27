@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .config import settings
 from .models import Entity, Extraction, Relation
+from .ontology_normalizer import canonicalize_extraction
 from .seed_ontology import DOMAIN_GUIDE
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,8 @@ SYSTEM_INSTRUCTIONS = (
     "각 관계에는 source(출발 엔티티 이름), target(도착 엔티티 이름), 간결한 관계타입(type; "
     "예: 원인/단계/기준지표/유입/관할/측정)을 부여합니다. "
     "같은 개념이 다시 나오면 동일한 이름을 재사용해 중복을 피하세요. "
+    "아래 도메인 가이드의 [표준 어휘]에 있는 표준 타입/관계타입을 가능하면 우선 사용하고, "
+    "약어·표기차(예: 총인=T-P)는 표준명으로 통일하세요. "
     "타입 라벨과 관계타입 이름에는 백틱(`)·제어문자를 넣지 말고 '_'로 시작하지 마세요. "
     "확실히 문장에 근거한 것만 추출하고, 이름은 짧고 표준적인 명사구로 만드세요."
 )
@@ -87,7 +90,11 @@ def _to_internal(out: _ExtractionOut) -> Extraction:
             )
         except (ValidationError, ValueError):
             logger.info("추출 관계 검증 실패 → 드롭")
-    return Extraction(entities=entities, relations=relations, summary=out.summary)
+    # 표준 어휘로 정규화(별칭→표준명, 비표준 타입 관대 통과, 중복 병합). 신뢰는 프롬프트가
+    # 아니라 이 후처리에 둔다(설계 불변식 §3 정신).
+    return canonicalize_extraction(
+        Extraction(entities=entities, relations=relations, summary=out.summary)
+    )
 
 
 def extract(

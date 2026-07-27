@@ -25,6 +25,7 @@ export default function Workspace({ project, onBack }: Props) {
   const [graph, setGraph] = useState<GraphData>(EMPTY);
   const [text, setText] = useState("");
   const [extraction, setExtraction] = useState<Extraction | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [emptyExtract, setEmptyExtract] = useState(false);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
 
@@ -63,14 +64,17 @@ export default function Workspace({ project, onBack }: Props) {
     setExtracting(true);
     setError(null);
     setExtraction(null);
+    setWarnings([]);
     setEmptyExtract(false);
     setIngestMsg(null);
     try {
       const res = await extractKnowledge(project.id, text);
-      if (res.entities.length === 0 && res.relations.length === 0) {
+      const ex = res.extraction;
+      if (ex.entities.length === 0 && ex.relations.length === 0) {
         setEmptyExtract(true);
       } else {
-        setExtraction(res);
+        setExtraction(ex);
+        setWarnings(res.warnings);
       }
     } catch (e) {
       setError(errMessage(e));
@@ -86,6 +90,7 @@ export default function Workspace({ project, onBack }: Props) {
       const res = await ingestExtraction(project.id, edited);
       setGraph(res.graph);
       setExtraction(null);
+      setWarnings([]);
       setEmptyExtract(false);
       setText("");
       const c = (res.stats?.counters ?? {}) as Record<string, number>;
@@ -227,8 +232,12 @@ export default function Workspace({ project, onBack }: Props) {
           {extraction && (
             <ExtractionPreview
               extraction={extraction}
+              warnings={warnings}
               ingesting={ingesting}
-              onCancel={() => setExtraction(null)}
+              onCancel={() => {
+                setExtraction(null);
+                setWarnings([]);
+              }}
               onConfirm={handleIngest}
             />
           )}

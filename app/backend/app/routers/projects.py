@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 from ..claude_extractor import extract
 from ..cypher_builder import assert_read_only_cypher
 from ..models import Extraction, _clean_label_or_type, _clean_value
+from ..ontology_normalizer import canonicalize_extraction, validate_domain_range
 from ..neo4j_service import (
     Neo4jUnavailable,
     create_project,
@@ -47,6 +48,15 @@ class ExtractRequest(BaseModel):
 class IngestResponse(BaseModel):
     stats: dict[str, Any]
     graph: dict[str, Any]
+
+
+class ExtractResponse(BaseModel):
+    """추출 미리보기 응답. `extraction`은 사용자 편집·ingest 대상이고, `warnings`는 domain/range
+    등 정규화 검증 경고다(경고는 관계를 삭제하지 않는다 — 사용자 판단에 맡긴다). `Extraction`
+    모델 자체를 오염시키지 않도록 응답 전용 래퍼로 둔다."""
+
+    extraction: Extraction
+    warnings: list[str] = Field(default_factory=list)
 
 
 class QueryRequest(BaseModel):
@@ -132,20 +142,31 @@ def delete(project_id: str) -> dict:
     return _svc(delete_project, project_id)
 
 
-@router.post("/{project_id}/extract", response_model=Extraction)
-def post_extract(project_id: str, req: ExtractRequest) -> Extraction:
-    """지식 문장에서 엔티티/관계 추출(미리보기, Claude 호출/과금). 아직 그래프에 반영 안 함."""
+@router.post("/{project_id}/extract", response_model=ExtractResponse)
+def post_extract(project_id: str, req: ExtractRequest) -> ExtractResponse:
+    """지식 문장에서 엔티티/관계 추출(미리보기, Claude 호출/과금). 아직 그래프에 반영 안 함.
+
+    추출 결과는 extractor가 표준 어휘로 정규화한 상태이며, domain/range 위반은 경고로 함께 반환한다.
+    """
     _require_project(project_id)
     graph = _svc(fetch_project_graph, project_id)
     names = [n["name"] for n in graph["nodes"]]
     types = sorted({t for n in graph["nodes"] for t in n.get("types", [])})
-    return extract(req.text, existing_entities=names, existing_types=types)
+    extraction = extract(req.text, existing_entities=names, existing_types=types)
+    warnings = validate_domain_range(extraction)
+    return ExtractResponse(extraction=extraction, warnings=warnings)
 
 
 @router.post("/{project_id}/ingest", response_model=IngestResponse)
 def post_ingest(project_id: str, extraction: Extraction) -> IngestResponse:
-    """확인/편집된 추출 결과를 그래프에 병합하고, 갱신된 그래프를 함께 반환."""
+    """확인/편집된 추출 결과를 그래프에 병합하고, 갱신된 그래프를 함께 반환.
+
+    사용자가 수동 입력·편집한 별칭도 최종 병합되도록 진입부에서 다시 정규화한다(멱등).
+    domain/range 경고는 미리보기(extract) 단계의 '참고용'이므로 여기서 재검증하지 않는다
+    (경고는 관계를 막지 않는다는 설계상 의도 — 편집으로 위반을 새로 만들어도 병합은 진행).
+    """
     _require_project(project_id)
+    extraction = canonicalize_extraction(extraction)
     result = _svc(ingest, project_id, extraction)
     graph = _svc(fetch_project_graph, project_id)
     return IngestResponse(stats=result["stats"], graph=graph)

@@ -1,8 +1,19 @@
 import { useEffect, useState } from "react";
 import type { Extraction } from "../types";
 
+// datalist 힌트용 표준 어휘(백엔드 seed_ontology.STANDARD_ENTITY_TYPES/STANDARD_RELATION_TYPES와
+// 느슨하게 동기화). 자유입력을 허용하되 표준 선택을 유도할 뿐이라 완벽 일치는 불필요하다.
+const STD_ENTITY_TYPES = [
+  "저수지", "하천", "댐", "측정소", "시설", "수질항목", "수문항목", "측정값",
+  "생물", "현상", "제도", "경보단계", "오염원", "대응조치", "기관", "지표",
+];
+const STD_RELATION_TYPES = [
+  "원인", "단계", "기준지표", "유입", "관할", "측정", "위치", "대응", "포함", "발령",
+];
+
 interface Props {
   extraction: Extraction;
+  warnings?: string[];
   onCancel: () => void;
   onConfirm: (edited: Extraction) => void;
   ingesting: boolean;
@@ -24,6 +35,7 @@ interface RelEdit {
 
 export default function ExtractionPreview({
   extraction,
+  warnings = [],
   onCancel,
   onConfirm,
   ingesting,
@@ -75,12 +87,39 @@ export default function ExtractionPreview({
 
   return (
     <div className="panel" style={{ marginTop: 16 }}>
+      {/* datalist: 타입 입력 자동완성용 표준 어휘(자유입력 허용) */}
+      <datalist id="std-entity-types">
+        {STD_ENTITY_TYPES.map((t) => (
+          <option key={t} value={t} />
+        ))}
+      </datalist>
+      <datalist id="std-relation-types">
+        {STD_RELATION_TYPES.map((t) => (
+          <option key={t} value={t} />
+        ))}
+      </datalist>
+
       <div className="row between">
         <h2 className="section-title">추출 미리보기</h2>
         <span className="meta-pill">
           노드 {chosenEnts}/{ents.length} · 관계 {chosenRels}/{rels.length}
         </span>
       </div>
+
+      {warnings.length > 0 && (
+        <div className="notice" style={{ margin: "8px 0 0", borderColor: "var(--warning)" }}>
+          <b>⚠ 관계 타입 검증 경고 {warnings.length}건</b>
+          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {warnings.map((w, i) => (
+              <li key={i} className="muted">{w}</li>
+            ))}
+          </ul>
+          <div className="muted" style={{ marginTop: 6 }}>
+            참고용입니다. 관계는 자동 삭제되지 않으니, 타입이 잘못됐으면 고치고 맞으면 그대로 두세요.
+          </div>
+        </div>
+      )}
+
       {extraction.summary && (
         <div className="muted" style={{ margin: "8px 0 12px" }}>{extraction.summary}</div>
       )}
@@ -101,6 +140,7 @@ export default function ExtractionPreview({
               className="inp"
               value={e.type}
               placeholder="타입(예: 현상)"
+              list="std-entity-types"
               onChange={(ev) => updateEnt(i, { type: ev.target.value })}
             />
           </label>
@@ -139,6 +179,7 @@ export default function ExtractionPreview({
                 className="inp"
                 value={r.type}
                 placeholder="관계타입"
+                list="std-relation-types"
                 onChange={(ev) => updateRel(i, { type: ev.target.value })}
               />
               <span className="muted">]-&gt;</span>

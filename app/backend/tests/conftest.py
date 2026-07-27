@@ -13,16 +13,3 @@ from app.config import settings
 @pytest.fixture(autouse=True)
 def _block_live_claude(monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "", raising=False)
-
-
-@pytest.fixture(autouse=True)
-def _reset_session_schema():
-    """인메모리 세션 스키마(routers.schema._current_schema)를 테스트마다 초기화한다.
-
-    프로세스 전역 mutable 상태라 테스트 순서 의존 오염을 막기 위함(단일 사용자 MVP).
-    """
-    from app.models import OntologySchema
-    from app.routers import schema as schema_router
-
-    schema_router._current_schema = OntologySchema()
-    yield

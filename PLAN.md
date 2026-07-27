@@ -33,10 +33,10 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 - **재사용**: `neo4j_service`(드라이버/실행), `cypher_builder.escape_identifier`(인젝션 방어),
   Claude 구조화 출력 패턴, `GraphView`, `models`의 식별자 방어선(`_clean_identifier` 등).
 
-## 진행 현황 (2026-07-24 기준)
+## 진행 현황 (2026-07-27 기준)
 
-**완료: N1~N5** (백엔드 v2 + 프론트 재작성 완료, end-to-end 동작 확인). **남음: N6**(구 v1
-코드 정리) + 커밋.
+**완료: N1~N6** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거, end-to-end 동작 확인).
+**다음: 프론트 디자인/기능 확장.**
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
@@ -45,15 +45,17 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 - **프론트**: `App.tsx`(프로젝트 목록↔작업공간), `ProjectList`, `Workspace`(누적 그래프+지식
   입력+추출 미리보기 오케스트레이션), `ExtractionPreview`(편집/선택 후 ingest), `GraphView`
   (controlled, 타입별 색상). 구 `SurveyWizard`/`SchemaReview`는 삭제.
-- **테스트**: 154 passed / 11 skipped(통합 opt-in). 통합 11개는 실 Neo4j(`RUN_NEO4J_TESTS=1`)로
+- **테스트**: 63 passed / 7 skipped(통합 opt-in). 통합 7개는 실 Neo4j(`RUN_NEO4J_TESTS=1`)로
   별도 전부 통과. 프론트 `tsc --noEmit` 0 에러.
 - **적대적 검수 완료**(백엔드·프론트 각각): 백엔드 **must-fix 없음**(인젝션·원자성·프로젝트
   격리·503·모델 재검증 라이브 통과) + LOW 3건 반영(관계 중복 제거·stub 설명 `''` 정규화·
   ingest 시 제약 방어). 프론트 must-fix 반영(제외 노드를 참조하는 관계 유령화 방지, 삭제
   로딩상태, ingest 통계 표시, 미리보기 이탈 경고).
-- **구 v1(설문/스키마) 백엔드는 아직 제거 전**(N6): `survey.py`, `routers/survey.py`,
-  `routers/schema.py`, `routers/graph.py`, `claude_enricher.py`, `seed_ontology.SEED_ONTOLOGY`,
-  `cypher_builder`의 스키마-메타 함수와 대응 테스트가 새 코드와 병존 중.
+- **구 v1(설문/스키마) 백엔드 제거 완료**(N6): `survey.py`, `routers/{survey,schema,graph}.py`,
+  `claude_enricher.py`, `seed_ontology.SEED_ONTOLOGY`, `models.py`의 v1 모델(OntologySchema/
+  NodeLabel/…), `cypher_builder`의 스키마-메타 함수, `neo4j_service`의 `commit_schema`/`fetch_graph`,
+  대응 테스트를 모두 삭제. `DOMAIN_GUIDE`(+상수)와 공유 인젝션 방어선은 유지. 방어선 테스트는
+  v2 Entity/Relation 기준으로 재작성해 커버리지 보존.
 
 ## 1. 아키텍처 & 데이터 흐름
 
@@ -167,8 +169,8 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
 - **[x] N3** `claude_extractor.py`(구조화 출력 + 재검증 + 캐시 + 우아한 열화).
 - **[x] N4** `routers/projects.py`(projects/extract/ingest/graph) + `main.py` 등록.
 - **[x] N5** 프론트 재작성(ProjectList + Workspace + 미리보기 + 누적 GraphView).
-- **[ ] N6** 구 코드 정리(v1 설문/스키마 라우터·`survey.py`·`claude_enricher.py`·스키마-메타
-  cypher/서비스·구 테스트 제거) + 다듬기 → 이후 커밋.
+- **[x] N6** 구 코드 정리(v1 설문/스키마 라우터·`survey.py`·`claude_enricher.py`·스키마-메타
+  cypher/서비스·v1 모델·구 테스트 제거) + 다듬기 → 커밋. 방어선 테스트는 v2 모델 기준 재작성.
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = "ontology_dev_pw"
 
-    # Anthropic (M3에서 사용)
+    # Anthropic (claude_extractor에서 사용)
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-opus-4-8"
 

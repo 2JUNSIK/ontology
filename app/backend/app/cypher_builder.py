@@ -1,33 +1,21 @@
-"""스키마 JSON → Cypher 변환 (M4).
+"""지식그래프 ingest: Extraction → Cypher 변환 (v2, PLAN.md §6).
 
 설계 불변식(CLAUDE.md / PLAN.md §6):
-- **§2 순수 함수**: `OntologySchema` → Cypher 문(+파라미터). 부수효과·Neo4j 접근 없음.
+- **§2 순수 함수**: `Extraction` → Cypher 문(+파라미터). 부수효과·Neo4j 접근 없음.
   실제 실행은 `neo4j_service`가 담당(관심사 분리). 그래서 단위테스트로 생성물을 검증 가능.
-- **§3 인젝션 방지**: 라벨/관계타입/키 같은 **DDL 식별자**는 화이트리스트(`_clean_identifier`)
-  재검증 + 백틱 이스케이프. 값·문자열은 전부 **파라미터 바인딩(`$param`)**. 사용자 문자열을
-  DDL에 직접 끼워넣지 않는다.
-- **§4 스키마 메타 vs 인스턴스 분리**: 설계된 스키마 자체는 `:_Schema` 메타노드 +
-  `:_SCHEMA_REL` 메타관계로 저장한다. 실제 도메인 인스턴스(측정소 개별 노드 등)는 여기서
-  다루지 않는다(일반 라벨로 별도 관리).
-
-메타 그래프 표현(시각화용):
-- 각 `NodeLabel` → `(:_Schema {label, description, key_property, properties_json})`.
-- 각 `RelationshipType` → 두 메타노드 사이의 `(:_Schema)-[:_SCHEMA_REL {rel_type,...}]->(:_Schema)`.
-  도메인 관계타입은 **고정 관계타입 `_SCHEMA_REL`의 속성(`rel_type`)** 으로 저장한다
-  (동적 관계타입을 DDL에 끼워넣지 않기 위함 — 인젝션 표면 제거).
+- **§3 인젝션 방지**: 타입 라벨/관계타입 같은 **DDL 식별자**는 화이트리스트(`_clean_identifier`)
+  재검증 + 백틱 이스케이프. 값·문자열(엔티티 이름·설명·project_id)은 전부 **파라미터
+  바인딩(`$param`)**. 사용자/LLM 문자열을 DDL/패턴에 직접 끼워넣지 않는다.
+- **§4 메타 vs 인스턴스 분리**: 프로젝트 메타는 `(:_Project)`, 지식 노드는 공통 기본 라벨
+  `(:_Entity {_project,_name})` + 동적 타입 라벨. 정체성 = (_project,_name) 복합 UNIQUE.
 """
 
 from __future__ import annotations
 
-import json
 from collections import OrderedDict
 from dataclasses import dataclass, field
 
-from .models import Extraction, OntologySchema, PropertyDef, _clean_identifier
-
-# 스키마 메타 저장에 쓰는 예약 식별자(사용자 입력 아님 — 상수).
-META_NODE_LABEL = "_Schema"
-META_REL_TYPE = "_SCHEMA_REL"
+from .models import Extraction, _clean_identifier
 
 # v2 지식그래프: 모든 지식 노드의 공통 기본 라벨. 정체성은 (_project,_name)로 잡고,
 # 도메인 타입은 이 위에 라벨로 얹는다(다중 라벨). 예: (:_Entity:현상 {_project,_name}).
@@ -40,7 +28,7 @@ class CypherStatement:
 
     cypher: str
     params: dict = field(default_factory=dict)
-    kind: str = ""  # constraint | meta_clear | meta_node | meta_rel
+    kind: str = ""  # constraint | entity_merge | entity_type | relation
 
 
 def escape_identifier(ident: str, kind: str = "식별자") -> str:
@@ -52,117 +40,6 @@ def escape_identifier(ident: str, kind: str = "식별자") -> str:
     """
     clean = _clean_identifier(ident, kind)
     return "`" + clean.replace("`", "``") + "`"
-
-
-def _properties_json(properties: list[PropertyDef]) -> str:
-    """속성 목록을 JSON 문자열로 직렬화.
-
-    Neo4j 속성값은 원시값/원시값 배열만 가능해 map 리스트를 그대로 저장할 수 없다.
-    따라서 속성 정의는 JSON 문자열로 저장하고, 조회 측(neo4j_service)에서 역직렬화한다.
-    ensure_ascii=False로 한글을 그대로 보존한다.
-    """
-    return json.dumps([p.model_dump() for p in properties], ensure_ascii=False)
-
-
-def build_constraints(schema: OntologySchema) -> list[CypherStatement]:
-    """key_property가 있는 노드마다 UNIQUE 제약 DDL을 만든다(IF NOT EXISTS로 멱등).
-
-    라벨/키는 식별자이므로 파라미터 바인딩이 불가능(Cypher DDL 제약) → 화이트리스트
-    재검증 + 백틱 이스케이프로만 안전하게 삽입한다.
-    """
-    stmts: list[CypherStatement] = []
-    for n in schema.nodes:
-        if n.key_property is None:
-            continue
-        label = escape_identifier(n.label, "라벨")
-        key = escape_identifier(n.key_property, "key_property")
-        cypher = (
-            f"CREATE CONSTRAINT IF NOT EXISTS "
-            f"FOR (n:{label}) REQUIRE n.{key} IS UNIQUE"
-        )
-        stmts.append(CypherStatement(cypher=cypher, kind="constraint"))
-    return stmts
-
-
-def build_meta_clear() -> CypherStatement:
-    """이전에 커밋된 스키마 메타(:_Schema)를 제거한다(재커밋 시 교체).
-
-    주의: `:_Schema` 메타노드/메타관계에만 한정된다. 도메인 인스턴스 노드는 건드리지 않는다.
-    """
-    label = escape_identifier(META_NODE_LABEL, "메타라벨")
-    return CypherStatement(
-        cypher=f"MATCH (s:{label}) DETACH DELETE s",
-        kind="meta_clear",
-    )
-
-
-def build_meta_nodes(schema: OntologySchema) -> CypherStatement:
-    """노드 라벨들을 :_Schema 메타노드로 저장(값은 전부 파라미터 바인딩)."""
-    label = escape_identifier(META_NODE_LABEL, "메타라벨")
-    rows = [
-        {
-            "label": n.label,
-            "description": n.description,
-            "key_property": n.key_property,
-            "properties_json": _properties_json(n.properties),
-        }
-        for n in schema.nodes
-    ]
-    cypher = (
-        "UNWIND $rows AS row "
-        f"MERGE (s:{label} {{label: row.label}}) "
-        "SET s.description = row.description, "
-        "s.key_property = row.key_property, "
-        "s.properties_json = row.properties_json"
-    )
-    return CypherStatement(cypher=cypher, params={"rows": rows}, kind="meta_node")
-
-
-def build_meta_rels(schema: OntologySchema) -> CypherStatement:
-    """관계 타입들을 :_Schema 메타노드 사이의 :_SCHEMA_REL 메타관계로 저장.
-
-    양 끝 라벨을 MERGE 하므로, 노드 목록에 없는 라벨을 참조해도 끊긴 엣지가 되지 않는다
-    (설계상 유의점은 OntologySchema.consistency_warnings가 이미 사용자에게 표시).
-    도메인 관계타입은 `rel_type` 속성(파라미터)으로 저장 — 동적 관계타입을 DDL에 넣지 않음.
-    """
-    label = escape_identifier(META_NODE_LABEL, "메타라벨")
-    rel = escape_identifier(META_REL_TYPE, "메타관계타입")
-    rows = [
-        {
-            "type": r.type,
-            "start_label": r.start_label,
-            "end_label": r.end_label,
-            "description": r.description,
-            "properties_json": _properties_json(r.properties),
-        }
-        for r in schema.relationships
-    ]
-    cypher = (
-        "UNWIND $rows AS row "
-        f"MERGE (a:{label} {{label: row.start_label}}) "
-        f"MERGE (b:{label} {{label: row.end_label}}) "
-        f"MERGE (a)-[rel:{rel} {{rel_type: row.type}}]->(b) "
-        "SET rel.description = row.description, "
-        "rel.properties_json = row.properties_json"
-    )
-    return CypherStatement(cypher=cypher, params={"rows": rows}, kind="meta_rel")
-
-
-def build_commit_statements(schema: OntologySchema) -> list[CypherStatement]:
-    """커밋에 필요한 Cypher 문들을 실행 순서대로 반환(순수 함수).
-
-    실행 순서: 제약(스키마 트랜잭션) → 메타 초기화 → 메타노드 → 메타관계(데이터 트랜잭션).
-    각 문은 neo4j_service에서 **개별 트랜잭션**으로 실행되므로, 한 트랜잭션 안에서
-    스키마 변경과 데이터 변경이 섞이지 않는다(Neo4j 제약 회피).
-    """
-    stmts: list[CypherStatement] = []
-    stmts.extend(build_constraints(schema))
-    stmts.append(build_meta_clear())
-    if schema.nodes:
-        stmts.append(build_meta_nodes(schema))
-    if schema.relationships:
-        stmts.append(build_meta_rels(schema))
-    return stmts
 
 
 # ==================================================================

@@ -1,7 +1,6 @@
 """FastAPI 진입점.
 
-  - M2: routers.survey (/api/survey/*), routers.schema (/api/suggest)
-  - M4: routers.schema 확장 (/api/schema, /api/schema/commit), routers.graph (/api/graph)
+  - v2: routers.projects (/api/projects/*) — 프로젝트 기반 지식그래프 빌더.
 """
 
 from contextlib import asynccontextmanager
@@ -11,10 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .neo4j_service import close_driver
-from .routers import graph as graph_router
 from .routers import projects as projects_router
-from .routers import schema as schema_router
-from .routers import survey as survey_router
 
 
 @asynccontextmanager
@@ -38,10 +34,6 @@ app.add_middleware(
 
 
 app.include_router(projects_router.router)  # v2: 프로젝트 기반 지식그래프
-# 아래 v1(설문/스키마) 라우터는 N6에서 제거 예정 — 현재는 병존.
-app.include_router(survey_router.router)
-app.include_router(schema_router.router)
-app.include_router(graph_router.router)
 
 
 @app.get("/health")

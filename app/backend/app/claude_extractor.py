@@ -3,7 +3,7 @@
 자연어 지식 문장 → 엔티티(노드) + 관계 추출. SDK 호출 형태는 `claude-api` 스킬 기준
 (모델 `claude-opus-4-8`, `client.messages.parse(output_format=...)` → `parsed_output`).
 
-핵심 설계(claude_enricher와 동일 패턴):
+핵심 설계:
 - **구조화 출력**: free-form dict를 피하려 전용 출력 스키마(`_ExtractionOut`)로 받고 내부
   `Extraction`으로 **재검증**한다. 타입 라벨/관계타입은 `_clean_label_or_type` 방어선을
   통과해야 하며(백틱/제어/'_'프리픽스 거부), 실패한 항목은 조용히 드롭한다.
@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 

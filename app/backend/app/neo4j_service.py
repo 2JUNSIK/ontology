@@ -1,4 +1,4 @@
-"""Neo4j 실행 계층 (M4).
+"""Neo4j 실행 계층 (v2).
 
 관심사 분리(불변식 §2): Cypher '생성'은 cypher_builder(순수 함수), '실행'은 여기가 담당.
 neo4j 파이썬 드라이버 **6.x** API 기준.
@@ -12,7 +12,6 @@ neo4j 파이썬 드라이버 **6.x** API 기준.
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import uuid
@@ -25,13 +24,10 @@ from neo4j.exceptions import ServiceUnavailable
 from .config import settings
 from .cypher_builder import (
     ENTITY_BASE_LABEL,
-    META_NODE_LABEL,
-    META_REL_TYPE,
-    build_commit_statements,
     build_entity_constraint,
     build_ingest_statements,
 )
-from .models import Extraction, OntologySchema
+from .models import Extraction
 
 PROJECT_LABEL = "_Project"
 
@@ -66,136 +62,6 @@ def close_driver() -> None:
         if _driver is not None:
             _driver.close()
             _driver = None
-
-
-def _add_counters(agg: dict[str, int], counters: Any) -> None:
-    """Neo4j SummaryCounters를 누적 dict에 더한다."""
-    agg["nodes_created"] += counters.nodes_created
-    agg["nodes_deleted"] += counters.nodes_deleted
-    agg["relationships_created"] += counters.relationships_created
-    agg["properties_set"] += counters.properties_set
-    agg["constraints_added"] += counters.constraints_added
-
-
-def _loads(value: Any) -> list[dict]:
-    """properties_json 역직렬화. 손상/None이면 빈 목록으로 안전 처리."""
-    if not value:
-        return []
-    try:
-        parsed = json.loads(value)
-    except (TypeError, ValueError):
-        return []
-    return parsed if isinstance(parsed, list) else []
-
-
-def commit_schema(schema: OntologySchema) -> dict[str, Any]:
-    """스키마를 Neo4j에 반영한다.
-
-    트랜잭션 전략(원자성 vs 스키마/데이터 혼용 금지 규칙의 균형):
-    - **제약 DDL**(constraint)은 각각 auto-commit(`session.run`)으로 실행한다. 한 트랜잭션에
-      스키마 변경과 데이터 변경을 함께 둘 수 없다는 Neo4j 제약을 지키기 위함이며, DDL은
-      IF NOT EXISTS로 멱등하다.
-    - **메타 교체**(meta_clear→meta_node→meta_rel)는 전부 순수 데이터 연산이므로 **하나의
-      관리형 쓰기 트랜잭션**(`execute_write`)으로 묶어 원자화한다. 이렇게 하면 초기화만
-      되고 새 메타는 안 써지는 '부분 커밋' 창이 생기지 않는다(all-or-nothing).
-
-    반환: {applied_cypher: [...], stats: {...}} (PLAN.md §5).
-    """
-    statements = build_commit_statements(schema)
-    constraint_stmts = [s for s in statements if s.kind == "constraint"]
-    data_stmts = [s for s in statements if s.kind != "constraint"]
-    driver = get_driver()
-    applied: list[str] = []
-    counters = {
-        "nodes_created": 0,
-        "nodes_deleted": 0,
-        "relationships_created": 0,
-        "properties_set": 0,
-        "constraints_added": 0,
-    }
-
-    def _write_meta(tx) -> list:
-        # 관리형 트랜잭션 내부: 실패 시 전체 롤백된다(원자적 메타 교체).
-        return [tx.run(st.cypher, st.params).consume().counters for st in data_stmts]
-
-    try:
-        with driver.session(database=_DATABASE) as session:
-            # 1) 스키마 DDL — 개별 auto-commit
-            for st in constraint_stmts:
-                _add_counters(counters, session.run(st.cypher, st.params).consume().counters)
-                applied.append(st.cypher)
-            # 2) 메타 교체 — 단일 관리형 쓰기 트랜잭션(원자적)
-            if data_stmts:
-                for c in session.execute_write(_write_meta):
-                    _add_counters(counters, c)
-                applied.extend(st.cypher for st in data_stmts)
-    except ServiceUnavailable as e:
-        logger.warning("Neo4j 연결 불가(commit): %s", type(e).__name__)
-        raise Neo4jUnavailable(str(e)) from e
-
-    return {
-        "applied_cypher": applied,
-        "stats": {
-            "statements": len(applied),
-            "constraints": len(constraint_stmts),
-            "meta_nodes": len(schema.nodes),
-            "meta_relationships": len(schema.relationships),
-            "counters": counters,
-        },
-    }
-
-
-def fetch_graph() -> dict[str, list[dict]]:
-    """커밋된 스키마 메타 그래프를 시각화용 {nodes, links}로 조회(읽기 전용).
-
-    노드 id는 라벨(고유). links의 source/target은 노드 id(라벨)와 매칭된다
-    (react-force-graph 규약).
-    """
-    driver = get_driver()
-    node_q = (
-        f"MATCH (s:`{META_NODE_LABEL}`) "
-        "RETURN s.label AS label, s.description AS description, "
-        "s.key_property AS key_property, s.properties_json AS properties_json "
-        "ORDER BY label"
-    )
-    rel_q = (
-        f"MATCH (a:`{META_NODE_LABEL}`)-[r:`{META_REL_TYPE}`]->(b:`{META_NODE_LABEL}`) "
-        "RETURN a.label AS source, b.label AS target, r.rel_type AS type, "
-        "r.description AS description, r.properties_json AS properties_json "
-        "ORDER BY type"
-    )
-    try:
-        node_res = driver.execute_query(
-            node_q, routing_=neo4j.RoutingControl.READ, database_=_DATABASE
-        )
-        rel_res = driver.execute_query(
-            rel_q, routing_=neo4j.RoutingControl.READ, database_=_DATABASE
-        )
-    except ServiceUnavailable as e:
-        logger.warning("Neo4j 연결 불가(graph): %s", type(e).__name__)
-        raise Neo4jUnavailable(str(e)) from e
-
-    nodes = [
-        {
-            "id": r["label"],
-            "label": r["label"],
-            "description": r["description"] or "",
-            "key_property": r["key_property"],
-            "properties": _loads(r["properties_json"]),
-        }
-        for r in node_res.records
-    ]
-    links = [
-        {
-            "source": r["source"],
-            "target": r["target"],
-            "type": r["type"],
-            "description": r["description"] or "",
-            "properties": _loads(r["properties_json"]),
-        }
-        for r in rel_res.records
-    ]
-    return {"nodes": nodes, "links": links}
 
 
 # ==================================================================

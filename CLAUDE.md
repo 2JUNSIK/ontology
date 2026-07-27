@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N5 완료** (2026-07-24 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N6 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
-백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **남은 것: N6**(구 v1 코드 정리) + 커밋.
+백엔드+프론트 재작성이 끝나 end-to-end 동작하며, **N6에서 구 v1(설문/스키마) 코드를 완전 제거**해
+코드베이스가 v2만 남았다. 다음 작업은 프론트 디자인/기능 확장.
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
   API(§5), 마일스톤(N1~N6, §10), "진행 현황"이 모두 여기 있다.
@@ -16,16 +17,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     (`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`), `neo4j_service.py`
     (프로젝트 CRUD·`ingest`·`fetch_project_graph`), `claude_extractor.py`, `routers/projects.py`,
     `config.py`, `main.py`.
-  - [v1 잔존 — N6에서 제거 예정] `survey.py`, `claude_enricher.py`, `routers/{survey,schema,graph}.py`,
-    `cypher_builder`의 스키마-메타 함수. **단 `seed_ontology.py`의 `DOMAIN_GUIDE`는 extractor가
-    재사용하므로 유지**, `SEED_ONTOLOGY`는 v1용(제거 대상).
+  - [v1 제거 완료(N6)] `survey.py`·`claude_enricher.py`·`routers/{survey,schema,graph}.py`·
+    `cypher_builder`의 스키마-메타 함수·`neo4j_service`의 `commit_schema`/`fetch_graph`·
+    `models.py`의 v1 모델(OntologySchema/NodeLabel/…)·`seed_ontology.SEED_ONTOLOGY`를 모두 삭제.
+    **`seed_ontology.py`의 `DOMAIN_GUIDE`(+임계값·수질항목 상수)는 extractor가 재사용하므로 유지.**
   - 프론트(`app/frontend/src/`): `App.tsx`, `api.ts`, `types.ts`,
     `components/{ProjectList,Workspace,ExtractionPreview,GraphView}.tsx`. (구 `SurveyWizard`/
     `SchemaReview`는 이미 삭제.)
 - **명령은 실제로 동작**(venv·node_modules 존재). 개발 중 백엔드(uvicorn :8000)·프론트(vite :5173)
   서버가 백그라운드로 떠 있을 수 있다. **백엔드 코드 변경 시 재시작 필요**(--reload 미사용 시 —
   포트 8000 리스너 kill 후 재기동). 프론트는 Vite HMR로 자동 반영.
-- **테스트 154 passed / 11 skipped**(통합은 opt-in). GitHub <https://github.com/2JUNSIK/ontology.git>
+- **테스트 63 passed / 7 skipped**(통합은 opt-in). GitHub <https://github.com/2JUNSIK/ontology.git>
   (main 브랜치). Windows 11 + PowerShell.
 
 ### 마일스톤마다 지키는 작업 방식 (사용자 상시 지시)
@@ -84,7 +86,7 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
    설문·Claude·Neo4j·프론트가 공유하는 유일한 표현이다. **v2 핵심**: `Entity`(name·type·
    description) / `Relation`(source·target·type·description) / `Extraction`(entities·relations·
    summary). 프론트 `types.ts`는 이 모델과 1:1 대응. 새 필드는 반드시 이 모델에서 시작해 양쪽
-   전파. (`OntologySchema`/`NodeLabel`/… 등 v1 모델은 N6까지 잔존하나 신규 흐름은 KG 모델 사용.)
+   전파. (v1 모델 `OntologySchema`/`NodeLabel`/… 은 N6에서 완전 제거됨 — KG 모델만 존재.)
 2. **`cypher_builder.py`는 순수 함수**: JSON→Cypher 변환은 부수효과·Neo4j 접근 없이 구현하고
    단위테스트로 검증한다. 실행은 `neo4j_service.py`가 담당(관심사 분리). v2 진입점은
    `build_ingest_statements(project_id, Extraction)` → `list[CypherStatement]`.

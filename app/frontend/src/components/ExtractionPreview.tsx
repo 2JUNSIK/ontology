@@ -23,6 +23,10 @@ interface EntEdit {
   name: string;
   type: string;
   description: string;
+  value?: number | null;
+  unit?: string;
+  comparator?: string;
+  observed_at?: string;
   include: boolean;
 }
 interface RelEdit {
@@ -72,7 +76,15 @@ export default function ExtractionPreview({
     const edited: Extraction = {
       entities: ents
         .filter((e) => e.include)
-        .map(({ name, type, description }) => ({ name, type, description })),
+        .map(({ name, type, description, value, unit, comparator, observed_at }) => ({
+          name,
+          type,
+          description,
+          value,
+          unit,
+          comparator,
+          observed_at,
+        })),
       relations: rels
         .filter((r) => r.include && !relBlocked(r))
         .map(({ source, target, type, description }) => ({ source, target, type, description })),
@@ -150,6 +162,41 @@ export default function ExtractionPreview({
             placeholder="설명(선택)"
             onChange={(ev) => updateEnt(i, { description: ev.target.value })}
           />
+          <div className="row" style={{ gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="muted" style={{ fontSize: 12 }}>정량(선택):</span>
+            <select
+              className="inp"
+              value={e.comparator ?? ""}
+              style={{ width: 72 }}
+              onChange={(ev) => updateEnt(i, { comparator: ev.target.value })}
+            >
+              <option value="">연산자</option>
+              <option value=">=">≥</option>
+              <option value="<=">≤</option>
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+              <option value="=">=</option>
+            </select>
+            <input
+              className="inp"
+              type="number"
+              value={e.value ?? ""}
+              placeholder="값"
+              style={{ width: 110 }}
+              onChange={(ev) => {
+                const raw = ev.target.value;
+                const num = Number(raw);
+                updateEnt(i, { value: raw === "" || Number.isNaN(num) ? null : num });
+              }}
+            />
+            <input
+              className="inp"
+              value={e.unit ?? ""}
+              placeholder="단위(예: cells/mL)"
+              style={{ width: 140 }}
+              onChange={(ev) => updateEnt(i, { unit: ev.target.value })}
+            />
+          </div>
         </div>
       ))}
 

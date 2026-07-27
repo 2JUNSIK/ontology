@@ -15,9 +15,10 @@ Claude 추출(claude_extractor) · Neo4j 반영(cypher_builder) · 프론트(typ
 
 from __future__ import annotations
 
+import math
 import unicodedata
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 _MAX_IDENT_LEN = 100
 
@@ -93,12 +94,25 @@ def _clean_value(value: str, kind: str, maxlen: int = _MAX_VALUE_LEN) -> str:
     return v
 
 
+# 정량 속성 comparator 화이트리스트(자유문자열 금지 — 값이지만 의미가 고정된 연산자).
+_ALLOWED_COMPARATORS = frozenset({"", ">=", "<=", ">", "<", "="})
+
+
 class Entity(BaseModel):
-    """지식 노드. 예: (녹조:현상), (관심:경보단계)."""
+    """지식 노드. 예: (녹조:현상), (관심:경보단계).
+
+    정량 속성(N10)은 모두 optional '값'이다(파라미터 바인딩) — 규칙·대표 수치를 노드 속성으로
+    기록한다(예: 관심 단계 → value=1000, unit='cells/mL', comparator='>='). 측정 시계열/이벤트
+    노드는 이 범위 밖(후속). 전부 기본값이 있어 기존 데이터/직렬화와 하위호환된다.
+    """
 
     name: str  # 값(파라미터 바인딩)
     type: str = ""  # 타입 라벨(식별자). 비면 미분류
     description: str = ""
+    value: float | None = None  # 수치(값). None이면 미기재
+    unit: str = ""  # 단위(값) 예: cells/mL, mg/L
+    comparator: str = ""  # "", ">=", "<=", ">", "<", "=" (화이트리스트)
+    observed_at: str = ""  # 시각(값, ISO8601 문자열). 있으면 기록
 
     @field_validator("name")
     @classmethod
@@ -112,6 +126,54 @@ class Entity(BaseModel):
         if not isinstance(v, str) or not v.strip():
             return ""
         return _clean_label_or_type(v, "엔티티 타입(type)")
+
+    @field_validator("unit", "observed_at")
+    @classmethod
+    def _v_quantity_strs(cls, v: str) -> str:
+        # 값 경로(파라미터 바인딩). 비면 '' 허용, 있으면 제어/포맷/구분자 거부 + 길이 제한.
+        if not isinstance(v, str) or not v.strip():
+            return ""
+        return _clean_value(v, "정량 속성(unit/observed_at)")
+
+    @field_validator("comparator")
+    @classmethod
+    def _v_comparator(cls, v: str) -> str:
+        if not isinstance(v, str):
+            return ""
+        v = v.strip()
+        if v not in _ALLOWED_COMPARATORS:
+            raise ValueError(
+                f"comparator는 {sorted(_ALLOWED_COMPARATORS)} 중 하나여야 합니다: {v!r}"
+            )
+        return v
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def _v_value(cls, v):
+        # mode="before": pydantic이 bool→float로 coercion하기 '전'의 raw 값을 받아야
+        # True/False를 숫자로 오인하지 않고 거부할 수 있다.
+        if v is None:
+            return None
+        # bool은 int의 서브클래스 → 실수로 True/False가 수치로 유입되는 것을 막는다.
+        if isinstance(v, bool):
+            raise ValueError(f"value는 숫자여야 합니다: {v!r}")
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            raise ValueError(f"value는 숫자여야 합니다: {v!r}")
+        if not math.isfinite(f):
+            raise ValueError("value는 유한한 수여야 합니다(NaN/Inf 불가 — Neo4j 저장 불가)")
+        return f
+
+    @model_validator(mode="after")
+    def _v_quantity_coherence(self):
+        # value가 없으면 comparator/unit은 무의미하다(값 없는 단위·연산자는 UI에 표시조차 안 됨).
+        # 고아 속성이 그래프에 조용히 남지 않도록 정규화한다. observed_at은 value와 독립적으로
+        # 의미가 있을 수 있어(관측/기록 시각) 유지한다.
+        if self.value is None and (self.comparator or self.unit):
+            self.comparator = ""
+            self.unit = ""
+        return self
 
 
 class Relation(BaseModel):

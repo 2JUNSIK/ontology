@@ -33,6 +33,10 @@ class _EntityOut(BaseModel):
     name: str
     type: str = ""
     description: str = ""
+    value: float | None = None  # 수치(있으면). 예: 1000
+    unit: str = ""  # 단위. 예: cells/mL
+    comparator: str = ""  # ">=", "<=", ">", "<", "=" 중 하나(임계값 방향)
+    observed_at: str = ""  # 시각(ISO8601 문자열, 있으면)
 
 
 class _RelationOut(BaseModel):
@@ -58,6 +62,9 @@ SYSTEM_INSTRUCTIONS = (
     "같은 개념이 다시 나오면 동일한 이름을 재사용해 중복을 피하세요. "
     "아래 도메인 가이드의 [표준 어휘]에 있는 표준 타입/관계타입을 가능하면 우선 사용하고, "
     "약어·표기차(예: 총인=T-P)는 표준명으로 통일하세요. "
+    "수치+단위+임계값 방향이 있으면 설명에 묻지 말고 구조화 필드로 뽑으세요: value(숫자)/"
+    "unit(단위)/comparator(>=,<=,>,<,= 중)/observed_at(ISO8601 시각, 있으면). "
+    "예: '관심 단계는 남조류세포수 1000 cells/mL 이상' → value=1000, unit=cells/mL, comparator='>='. "
     "타입 라벨과 관계타입 이름에는 백틱(`)·제어문자를 넣지 말고 '_'로 시작하지 마세요. "
     "확실히 문장에 근거한 것만 추출하고, 이름은 짧고 표준적인 명사구로 만드세요."
 )
@@ -79,7 +86,17 @@ def _to_internal(out: _ExtractionOut) -> Extraction:
     entities: list[Entity] = []
     for e in out.entities:
         try:
-            entities.append(Entity(name=e.name, type=e.type, description=e.description))
+            entities.append(
+                Entity(
+                    name=e.name,
+                    type=e.type,
+                    description=e.description,
+                    value=e.value,
+                    unit=e.unit,
+                    comparator=e.comparator,
+                    observed_at=e.observed_at,
+                )
+            )
         except (ValidationError, ValueError):
             logger.info("추출 엔티티 검증 실패 → 드롭")
     relations: list[Relation] = []

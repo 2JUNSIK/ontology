@@ -208,6 +208,8 @@ def fetch_project_graph(project_id: str) -> dict[str, list[dict]]:
     node_q = (
         f"MATCH (n:`{ENTITY_BASE_LABEL}` {{_project: $pid}}) "
         "RETURN n._name AS name, n.description AS description, "
+        "n.value AS value, n.unit AS unit, n.comparator AS comparator, "
+        "n.observed_at AS observed_at, "
         "[l IN labels(n) WHERE l <> $base] AS types "
         "ORDER BY name"
     )
@@ -242,6 +244,10 @@ def fetch_project_graph(project_id: str) -> dict[str, list[dict]]:
             "type": (r["types"][0] if r["types"] else ""),
             "types": r["types"],
             "description": r["description"] or "",
+            "value": r["value"],  # 없으면 None(프론트 number|null)
+            "unit": r["unit"] or "",
+            "comparator": r["comparator"] or "",
+            "observed_at": r["observed_at"] or "",
         }
         for r in node_res.records
     ]
@@ -333,6 +339,10 @@ def _node_payload(labels: list[str], props: dict) -> dict:
         "type": types[0] if types else "",
         "types": types,
         "description": props.get("description") or "",
+        "value": props.get("value"),  # 없으면 None
+        "unit": props.get("unit") or "",
+        "comparator": props.get("comparator") or "",
+        "observed_at": props.get("observed_at") or "",
     }
 
 

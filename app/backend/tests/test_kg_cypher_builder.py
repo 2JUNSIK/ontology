@@ -198,6 +198,72 @@ def test_ingest_dedup_upgrades_empty_description():
     assert rows[0]["description"] == "채움"  # 빈 설명은 비어있지 않은 것으로 승격
 
 
+# ------------------------- ingest: 정량 속성(N10) -------------------------
+
+def test_ingest_quantity_bound_as_params():
+    ext = Extraction(
+        entities=[
+            Entity(name="관심", type="경보단계", value=1000, unit="cells/mL", comparator=">="),
+        ]
+    )
+    stmts = build_ingest_statements("p", ext)
+    (em,) = _by_kind(stmts, "entity_merge")
+    # 값·단위·연산자는 전부 파라미터 — Cypher 문자열에 새지 않는다(인젝션 §3)
+    assert "1000" not in em.cypher
+    assert "cells/mL" not in em.cypher
+    assert ">=" not in em.cypher
+    # 속성 키는 고정 식별자로 SET 절에 등장
+    assert "n.value" in em.cypher and "n.unit" in em.cypher and "n.comparator" in em.cypher
+    row = em.params["rows"][0]
+    assert row["value"] == 1000.0 and row["unit"] == "cells/mL" and row["comparator"] == ">="
+
+
+def test_ingest_value_none_preserves_existing():
+    # value 미기재(None)면 SET이 기존값 유지 패턴이어야 한다(덮어쓰기 아님)
+    ext = Extraction(entities=[Entity(name="녹조", type="현상")])
+    stmts = build_ingest_statements("p", ext)
+    (em,) = _by_kind(stmts, "entity_merge")
+    assert "row.value IS NOT NULL" in em.cypher
+    assert "ELSE n.value" in em.cypher
+    assert em.params["rows"][0]["value"] is None
+
+
+def test_ingest_quantity_stub_endpoint_is_empty():
+    # 관계 끝점 stub은 정량 속성이 비어 있어야(None/'')
+    ext = Extraction(relations=[Relation(source="관심", type="기준지표", target="남조류세포수")])
+    stmts = build_ingest_statements("p", ext)
+    (em,) = _by_kind(stmts, "entity_merge")
+    rows = {r["name"]: r for r in em.params["rows"]}
+    assert rows["남조류세포수"]["value"] is None
+    assert rows["남조류세포수"]["unit"] == ""
+
+
+def test_ingest_quantity_dedup_promotes_empty_and_keeps_first():
+    # 같은 이름 2회: 빈 정량 → 값 있는 쪽으로 승격, 값 충돌 시 첫 값 유지(_entity_set 규칙).
+    ext = Extraction(
+        entities=[
+            Entity(name="관심", type="경보단계"),  # value 없음
+            Entity(name="관심", value=1000, unit="cells/mL"),
+        ]
+    )
+    (em,) = _by_kind(build_ingest_statements("p", ext), "entity_merge")
+    row = next(r for r in em.params["rows"] if r["name"] == "관심")
+    assert row["value"] == 1000.0 and row["unit"] == "cells/mL"  # 빈 → 값 승격
+
+    ext2 = Extraction(entities=[Entity(name="관심", value=1000), Entity(name="관심", value=2000)])
+    (em2,) = _by_kind(build_ingest_statements("p", ext2), "entity_merge")
+    row2 = next(r for r in em2.params["rows"] if r["name"] == "관심")
+    assert row2["value"] == 1000.0  # 값 충돌 → 첫 값 유지(승격은 빈 필드만)
+
+
+def test_ingest_value_zero_is_param_not_literal():
+    # value=0도 파라미터로만 들어가고 SET 절은 IS NOT NULL 패턴을 유지한다.
+    ext = Extraction(entities=[Entity(name="영점", value=0, unit="mg/L")])
+    (em,) = _by_kind(build_ingest_statements("p", ext), "entity_merge")
+    assert em.params["rows"][0]["value"] == 0.0
+    assert "row.value IS NOT NULL" in em.cypher
+
+
 # ============================================================
 # 읽기 경로(text-to-cypher): assert_read_only_cypher 정적 검증
 # ============================================================

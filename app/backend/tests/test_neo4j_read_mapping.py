@@ -21,6 +21,7 @@ def test_node_payload_basic():
     p = _node_payload(labels, props)
     assert p == {
         "id": "녹조", "name": "녹조", "type": "현상", "types": ["현상"], "description": "설명",
+        "value": None, "unit": "", "comparator": "", "observed_at": "",
     }
 
 
@@ -28,6 +29,20 @@ def test_node_payload_untyped():
     labels, props = _n("x")
     p = _node_payload(labels, props)
     assert p["type"] == "" and p["types"] == []
+
+
+def test_node_payload_includes_quantity():
+    """정량 속성(value/unit/comparator/observed_at)이 payload에 실린다(N10)."""
+    labels = [BASE, "경보단계"]
+    props = {
+        "_name": "관심", "_project": "p", "description": "",
+        "value": 1000.0, "unit": "cells/mL", "comparator": ">=", "observed_at": "2026-07-01",
+    }
+    p = _node_payload(labels, props)
+    assert p["value"] == 1000.0
+    assert p["unit"] == "cells/mL"
+    assert p["comparator"] == ">="
+    assert p["observed_at"] == "2026-07-01"
 
 
 def test_collect_graph_nodes_and_links():

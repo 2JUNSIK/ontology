@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import type { GraphData, GraphNodeData } from "../types";
+import { formatQuantity } from "./KnowledgeInventory";
 
 interface Props {
   data: GraphData;
@@ -135,6 +136,12 @@ export default function GraphView({ data }: Props) {
                       {t}
                     </span>
                   ))}
+                </div>
+              )}
+              {formatQuantity(selected) && (
+                <div style={{ marginTop: 8 }}>
+                  <span className="badge">값</span>{" "}
+                  <span className="mono">{formatQuantity(selected)}</span>
                 </div>
               )}
               {selected.description && (

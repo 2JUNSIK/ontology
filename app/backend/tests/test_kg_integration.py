@@ -81,6 +81,45 @@ def test_ingest_is_idempotent(project):
     assert len(g["links"]) == 2
 
 
+def test_ingest_quantity_roundtrip(project):
+    # N10: 정량 속성(value/unit/comparator)이 노드에 저장·조회된다.
+    from app import neo4j_service
+    from app.models import Entity, Extraction
+
+    ext = Extraction(
+        entities=[
+            Entity(name="관심", type="경보단계", value=1000, unit="cells/mL", comparator=">="),
+        ]
+    )
+    neo4j_service.ingest(project["id"], ext)
+    g = neo4j_service.fetch_project_graph(project["id"])
+    n = next(x for x in g["nodes"] if x["name"] == "관심")
+    assert n["value"] == 1000
+    assert n["unit"] == "cells/mL"
+    assert n["comparator"] == ">="
+
+
+def test_ingest_quantity_merge_updates_and_preserves(project):
+    # N10: value 미기재(None) 재입력은 기존 수치를 유지, 기재 시 갱신.
+    from app import neo4j_service
+    from app.models import Entity, Extraction
+
+    pid = project["id"]
+    neo4j_service.ingest(
+        pid,
+        Extraction(entities=[Entity(name="관심", type="경보단계", value=1000, unit="cells/mL")]),
+    )
+    # value 없이 설명만 추가 → 수치 유지
+    neo4j_service.ingest(pid, Extraction(entities=[Entity(name="관심", description="발령 단계")]))
+    n = next(x for x in neo4j_service.fetch_project_graph(pid)["nodes"] if x["name"] == "관심")
+    assert n["value"] == 1000  # 유지
+    assert n["description"] == "발령 단계"  # 갱신
+    # value 기재 재입력 → 갱신
+    neo4j_service.ingest(pid, Extraction(entities=[Entity(name="관심", value=1500)]))
+    n2 = next(x for x in neo4j_service.fetch_project_graph(pid)["nodes"] if x["name"] == "관심")
+    assert n2["value"] == 1500
+
+
 def test_project_scoping_isolation(project):
     from app import neo4j_service
 
@@ -133,7 +172,10 @@ def test_api_extract_no_key_degrades(project):
         json={"text": "녹조는 남조류가 증식하는 현상이다"},
     )
     assert r.status_code == 200
-    assert r.json()["entities"] == []
+    body = r.json()
+    # N9: 응답이 {extraction, warnings}로 래핑됨
+    assert body["extraction"]["entities"] == []
+    assert body["warnings"] == []
 
 
 def test_delete_entity_cascades_relations(project):

@@ -14,6 +14,21 @@ export const entKey = (name: string) => `e:${name}`;
 export const relKey = (source: string, type: string, target: string) =>
   "r:" + JSON.stringify([source, type, target]);
 
+// 정량 속성(N10) 표시 헬퍼. GraphView에서도 재사용한다. 예: "≥ 1000 cells/mL".
+const CMP_SYMBOL: Record<string, string> = {
+  ">=": "≥", "<=": "≤", ">": ">", "<": "<", "=": "=",
+};
+export function formatQuantity(n: {
+  value?: number | null;
+  unit?: string;
+  comparator?: string;
+}): string {
+  if (n.value === null || n.value === undefined) return "";
+  const cmp = n.comparator ? `${CMP_SYMBOL[n.comparator] ?? n.comparator} ` : "";
+  const unit = n.unit ? ` ${n.unit}` : "";
+  return `${cmp}${n.value}${unit}`;
+}
+
 const PAGE_SIZE = 10; // 10개 초과 시 페이지 분할
 
 function Pager({
@@ -93,6 +108,7 @@ export default function KnowledgeInventory({
                   <tr>
                     <th>이름</th>
                     <th>타입</th>
+                    <th>값</th>
                     <th>설명</th>
                     {!readOnly && <th className="actions" />}
                   </tr>
@@ -112,6 +128,9 @@ export default function KnowledgeInventory({
                               <span key={t} className="badge" style={{ marginRight: 4 }}>{t}</span>
                             ))
                           )}
+                        </td>
+                        <td className="mono">
+                          {formatQuantity(n) || <span className="muted">—</span>}
                         </td>
                         <td className="kg-desc">{n.description || <span className="muted">—</span>}</td>
                         {!readOnly && (

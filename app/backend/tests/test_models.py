@@ -173,3 +173,94 @@ def test_description_is_free_text_no_validator():
     assert Entity(name="x", description=long_text).description == long_text
     r = Relation(source="A", target="B", type="rel", description=injectionish)
     assert r.description == injectionish
+
+
+# ---------------------------------------------------------------- 정량 속성(N10)
+
+
+def test_entity_quantity_defaults():
+    e = Entity(name="관심")
+    assert e.value is None and e.unit == "" and e.comparator == "" and e.observed_at == ""
+
+
+def test_entity_quantity_roundtrip():
+    e = Entity(
+        name="관심", type="경보단계", value=1000, unit="cells/mL",
+        comparator=">=", observed_at="2026-07-01",
+    )
+    assert e.value == 1000.0 and e.unit == "cells/mL" and e.comparator == ">="
+    assert Entity.model_validate(e.model_dump()) == e
+
+
+def test_extraction_backward_compat_without_quantity():
+    # 정량 필드 없이 만든 데이터도 dump/validate 왕복이 유지된다(하위호환 가드).
+    ext = Extraction(entities=[Entity(name="녹조", type="현상")])
+    assert Extraction.model_validate(ext.model_dump()) == ext
+
+
+def test_entity_value_rejects_nan_inf():
+    for bad in [float("nan"), float("inf"), float("-inf")]:
+        with pytest.raises(ValidationError):
+            Entity(name="x", value=bad)
+
+
+def test_entity_value_rejects_bool_and_nonnumeric():
+    with pytest.raises(ValidationError):
+        Entity(name="x", value=True)  # bool은 숫자로 취급 안 함
+    with pytest.raises(ValidationError):
+        Entity(name="x", value="열")
+
+
+def test_entity_value_accepts_int_and_negative():
+    assert Entity(name="x", value=0).value == 0.0
+    assert Entity(name="x", value=-5).value == -5.0
+
+
+@pytest.mark.parametrize("c", ["", ">=", "<=", ">", "<", "="])
+def test_entity_comparator_whitelist_accepts(c):
+    # value가 있어야 comparator가 유지된다(value 없으면 MED-1 정규화로 클리어됨).
+    assert Entity(name="x", value=1, comparator=c).comparator == c
+
+
+@pytest.mark.parametrize("bad", [">>", "==", "=<", "DROP", "≥", "같음"])
+def test_entity_comparator_whitelist_rejects(bad):
+    with pytest.raises(ValidationError):
+        Entity(name="x", comparator=bad)
+
+
+def test_entity_unit_rejects_control_char():
+    with pytest.raises(ValidationError):
+        Entity(name="x", unit="mg\x00/L")
+
+
+def test_entity_unit_allows_special_symbols():
+    # 단위엔 특수기호(μ, ℃, /) 허용(값 경로 — 제어/포맷/구분자만 거부). value가 있어야 유지됨.
+    assert Entity(name="x", value=1, unit="μg/L").unit == "μg/L"
+    assert Entity(name="x", value=1, unit="℃").unit == "℃"
+
+
+def test_entity_orphan_quantity_normalized_when_value_none():
+    # value 없이 comparator/unit만 오면 무의미 → 정규화로 제거(고아 속성 방지, MED-1).
+    e = Entity(name="x", comparator=">=", unit="mg/L")
+    assert e.value is None
+    assert e.comparator == "" and e.unit == ""
+
+
+def test_entity_observed_at_kept_without_value():
+    # observed_at은 value 없이도 유지(관측/기록 시각으로 독립 의미 가능).
+    e = Entity(name="x", observed_at="2026-07-01")
+    assert e.observed_at == "2026-07-01"
+
+
+def test_entity_value_zero_preserved():
+    # 0은 falsy지만 None이 아니므로 정량 속성이 유지된다(0 함정 방지).
+    e = Entity(name="x", value=0, unit="mg/L", comparator="=")
+    assert e.value == 0.0
+    assert e.unit == "mg/L" and e.comparator == "="
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf", "1e400"])
+def test_entity_value_rejects_nonfinite_strings(bad):
+    # 문자열도 float 변환 후 유한성 검사 → NaN/Inf/오버플로 표기 거부.
+    with pytest.raises(ValidationError):
+        Entity(name="x", value=bad)

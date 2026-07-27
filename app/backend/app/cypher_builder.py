@@ -58,19 +58,43 @@ def build_entity_constraint() -> CypherStatement:
     return CypherStatement(cypher=cypher, kind="constraint")
 
 
-def _entity_set(extraction: Extraction) -> "OrderedDict[str, str]":
-    """ingest 대상 엔티티 집합: {이름 -> 설명}. 관계 끝점 중 엔티티 목록에 없는 이름은
-    미분류 stub로 보강해 끊긴 관계(=그래프에서 조용히 사라지는 엣지)를 막는다.
-    입력 순서를 보존(OrderedDict)해 결정적 출력을 만든다.
+def _empty_attrs() -> dict:
+    return {"description": "", "value": None, "unit": "", "comparator": "", "observed_at": ""}
+
+
+def _entity_set(extraction: Extraction) -> "OrderedDict[str, dict]":
+    """ingest 대상 엔티티 집합: {이름 -> {description, value, unit, comparator, observed_at}}.
+    관계 끝점 중 엔티티 목록에 없는 이름은 미분류 stub(빈 속성)로 보강해 끊긴 관계(=그래프에서
+    조용히 사라지는 엣지)를 막는다. 입력 순서를 보존(OrderedDict)해 결정적 출력을 만든다.
+
+    같은 이름이 여러 번이면 **비어있지 않은 필드로 승격**한다(먼저 등장한 값 우선, 빈 필드만
+    이후 값으로 채움). 정량 속성도 동일 규칙(value는 None을 '빈 값'으로 취급).
     """
-    names: "OrderedDict[str, str]" = OrderedDict()
+    names: "OrderedDict[str, dict]" = OrderedDict()
     for e in extraction.entities:
-        # 같은 이름이 여러 번이면, 설명이 있는 쪽을 우선 보존.
-        if e.name not in names or (not names[e.name] and e.description):
-            names[e.name] = e.description
+        if e.name not in names:
+            names[e.name] = {
+                "description": e.description,
+                "value": e.value,
+                "unit": e.unit,
+                "comparator": e.comparator,
+                "observed_at": e.observed_at,
+            }
+        else:
+            cur = names[e.name]
+            if not cur["description"] and e.description:
+                cur["description"] = e.description
+            if cur["value"] is None and e.value is not None:
+                cur["value"] = e.value
+            if not cur["unit"] and e.unit:
+                cur["unit"] = e.unit
+            if not cur["comparator"] and e.comparator:
+                cur["comparator"] = e.comparator
+            if not cur["observed_at"] and e.observed_at:
+                cur["observed_at"] = e.observed_at
     for r in extraction.relations:
         for nm in (r.source, r.target):
-            names.setdefault(nm, "")
+            names.setdefault(nm, _empty_attrs())
     return names
 
 
@@ -96,15 +120,34 @@ def build_ingest_statements(project_id: str, extraction: Extraction) -> list[Cyp
     base = escape_identifier(ENTITY_BASE_LABEL, "엔티티 기본 라벨")
     stmts: list[CypherStatement] = []
 
-    # 1) 엔티티 MERGE (이름=정체성, 설명은 비어있지 않을 때만 갱신)
+    # 1) 엔티티 MERGE (이름=정체성). 문자열 속성은 비어있지 않을 때만 갱신, value는 None이
+    #    아닐 때만 갱신(기존값 유지). 모든 값은 파라미터 바인딩 — 속성 키만 고정 식별자(불변식 §3).
+    #    정책(sticky): 빈 값/None 재입력으로는 기존 속성을 '지울' 수 없다(description과 동일) —
+    #    수정은 새 값으로 덮어써서 한다. 값 삭제가 필요하면 노드 삭제/재입력으로.
     entities = _entity_set(extraction)
     if entities:
-        rows = [{"name": nm, "description": desc} for nm, desc in entities.items()]
+        rows = [
+            {
+                "name": nm,
+                "description": a["description"],
+                "value": a["value"],
+                "unit": a["unit"],
+                "comparator": a["comparator"],
+                "observed_at": a["observed_at"],
+            }
+            for nm, a in entities.items()
+        ]
         cypher = (
             "UNWIND $rows AS row "
             f"MERGE (n:{base} {{_project: $pid, _name: row.name}}) "
             "SET n.description = CASE WHEN row.description <> '' "
-            "THEN row.description ELSE coalesce(n.description, '') END"
+            "THEN row.description ELSE coalesce(n.description, '') END, "
+            "n.unit = CASE WHEN row.unit <> '' THEN row.unit ELSE coalesce(n.unit, '') END, "
+            "n.comparator = CASE WHEN row.comparator <> '' "
+            "THEN row.comparator ELSE coalesce(n.comparator, '') END, "
+            "n.observed_at = CASE WHEN row.observed_at <> '' "
+            "THEN row.observed_at ELSE coalesce(n.observed_at, '') END, "
+            "n.value = CASE WHEN row.value IS NOT NULL THEN row.value ELSE n.value END"
         )
         stmts.append(
             CypherStatement(cypher=cypher, params={"pid": project_id, "rows": rows}, kind="entity_merge")

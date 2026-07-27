@@ -20,7 +20,8 @@ def test_alert_thresholds_are_monotonic():
 def test_domain_guide_contains_thresholds_and_items():
     assert "1,000,000" in DOMAIN_GUIDE  # 대발생 임계값
     assert "남조류세포수" in DOMAIN_GUIDE
-    assert "이벤트 노드" in DOMAIN_GUIDE
+    # N10: 측정값을 '정량 속성'으로 기록하는 모델링 원칙(구조화 필드 안내)
+    assert "value" in DOMAIN_GUIDE and "comparator" in DOMAIN_GUIDE
 
 
 def test_water_quality_items_present():

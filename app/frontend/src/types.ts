@@ -9,10 +9,15 @@ export interface Project {
 }
 
 // 지식 노드. name=값, type=타입 라벨(비면 미분류).
+// 정량 속성(N10): 규칙·대표 수치. 전부 optional(기존 데이터와 하위호환).
 export interface Entity {
   name: string;
   type: string;
   description: string;
+  value?: number | null; // 수치(없으면 null)
+  unit?: string; // 단위 예: cells/mL
+  comparator?: string; // "", ">=", "<=", ">", "<", "="
+  observed_at?: string; // 시각(ISO8601 문자열)
 }
 
 // 지식 관계. source/target=엔티티 이름, type=관계타입.
@@ -44,6 +49,10 @@ export interface GraphNodeData {
   type: string; // 색상용 대표 타입(첫 타입 라벨)
   types: string[]; // 전체 타입 라벨
   description: string;
+  value?: number | null; // 정량 속성(N10)
+  unit?: string;
+  comparator?: string;
+  observed_at?: string;
 }
 
 export interface GraphLinkData {

@@ -11,6 +11,7 @@ import type { Extraction, GraphData, Project } from "../types";
 import ExtractionPreview from "./ExtractionPreview";
 import GraphView from "./GraphView";
 import KnowledgeInventory, { entKey, relKey } from "./KnowledgeInventory";
+import QueryPanel from "./QueryPanel";
 
 interface Props {
   project: Project;
@@ -245,7 +246,10 @@ export default function Workspace({ project, onBack }: Props) {
           )}
         </div>
 
-        {/* 3. 지식 그래프 */}
+        {/* 3. 지식 탐색 (자연어 → Cypher, 읽기 전용) */}
+        <QueryPanel projectId={project.id} />
+
+        {/* 4. 지식 그래프 */}
         <div className="panel graph-panel">
           <div className="row between" style={{ marginBottom: 16 }}>
             <h2 className="section-title">지식 그래프</h2>

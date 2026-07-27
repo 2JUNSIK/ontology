@@ -249,3 +249,196 @@ def test_delete_entity_isolated_across_projects(project):
         assert "녹조" in {n["name"] for n in g_other["nodes"]}
     finally:
         neo4j_service.delete_project(other["id"])
+
+
+# ---- 읽기 경로(text-to-cypher): run_read_query 실행/격리/읽기전용 ----
+
+_NODE_QUERY = (
+    "MATCH (n:`_Entity` {_project: $pid})-[r]->(m:`_Entity` {_project: $pid}) "
+    "RETURN n, r, m LIMIT 100"
+)
+
+
+def test_run_read_query_returns_graph(project):
+    from app import neo4j_service
+
+    neo4j_service.ingest(project["id"], _ext())
+    res = neo4j_service.run_read_query(project["id"], _NODE_QUERY)
+    names = {n["name"] for n in res["graph"]["nodes"]}
+    assert {"녹조", "남조류"} <= names
+    assert any(l["type"] == "원인" for l in res["graph"]["links"])
+    # 노드 payload 포맷(프론트 재사용) 확인
+    nokjo = next(n for n in res["graph"]["nodes"] if n["name"] == "녹조")
+    assert "현상" in nokjo["types"]
+
+
+def test_run_read_query_scalar_rows(project):
+    from app import neo4j_service
+
+    neo4j_service.ingest(project["id"], _ext())
+    res = neo4j_service.run_read_query(
+        project["id"], "MATCH (n:`_Entity` {_project: $pid}) RETURN count(n) AS c"
+    )
+    assert res["columns"] == ["c"]
+    assert res["rows"] and res["rows"][0][0] >= 3
+
+
+def test_run_read_query_write_is_rejected_by_read_txn(project):
+    # 정적 검증을 우회해 쓰기 Cypher를 직접 넘겨도 READ 트랜잭션이 드라이버 레벨에서 거부한다.
+    from neo4j.exceptions import Neo4jError
+
+    from app import neo4j_service
+
+    neo4j_service.ingest(project["id"], _ext())
+    with pytest.raises(Neo4jError):
+        neo4j_service.run_read_query(
+            project["id"],
+            "MATCH (n:`_Entity` {_project: $pid, _name: '녹조'}) DETACH DELETE n",
+        )
+    # 데이터가 실제로 지워지지 않았는지 확인
+    g = neo4j_service.fetch_project_graph(project["id"])
+    assert "녹조" in {n["name"] for n in g["nodes"]}
+
+
+def test_run_read_query_post_filter_isolates_projects(project):
+    # 쿼리가 프로젝트 필터를 생략(모든 _Entity)해도, 사후 매핑이 타 프로젝트 노드를 드롭한다.
+    from app import neo4j_service
+
+    other = neo4j_service.create_project("IT_읽기격리", "")
+    try:
+        neo4j_service.ingest(project["id"], _ext())
+        neo4j_service.ingest(other["id"], Extraction(entities=[Entity(name="비밀노드", type="현상")]))
+        # $pid는 검증 통과용으로 WHERE에 쓰되, MATCH는 전 프로젝트를 훑는 형태
+        res = neo4j_service.run_read_query(
+            project["id"],
+            "MATCH (n:`_Entity`) WHERE n._project <> $pid OR n._project = $pid RETURN n LIMIT 500",
+        )
+        names = {n["name"] for n in res["graph"]["nodes"]}
+        assert "녹조" in names
+        assert "비밀노드" not in names  # 사후 필터가 타 프로젝트 드롭
+    finally:
+        neo4j_service.delete_project(other["id"])
+
+
+def test_api_query_no_key_degrades(project):
+    # conftest가 키 공백화 → generate_query None → 200 + error(무비용, 빈 그래프).
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    r = client.post(f"/api/projects/{project['id']}/query", json={"question": "녹조와 연결된 노드 보여줘"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["error"]
+    assert body["graph"]["nodes"] == []
+
+
+def test_api_query_unknown_project_404():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    r = client.post("/api/projects/nonexistent-id/query", json={"question": "질문"})
+    assert r.status_code == 404
+
+
+def test_run_read_query_rows_mask_other_project_nodes(project):
+    # MUST-FIX-1: rows(표) 경로도 타 프로젝트 Node를 마스킹(None)해 이름 유출을 막는다.
+    from app import neo4j_service
+
+    other = neo4j_service.create_project("IT_rows격리", "")
+    try:
+        neo4j_service.ingest(project["id"], _ext())  # 녹조/남조류/…
+        neo4j_service.ingest(
+            other["id"], Extraction(entities=[Entity(name="비밀노드", type="현상")])
+        )
+        # 필터를 우회해 전 프로젝트 Node를 RETURN 시도(정적 검증 통과용으로 $pid/_project 포함)
+        res = neo4j_service.run_read_query(
+            project["id"],
+            "MATCH (n:`_Entity`) WHERE n._project = $pid OR n._project <> $pid RETURN n LIMIT 500",
+        )
+        flat = [c for row in res["rows"] for c in row]
+        assert "녹조" in flat  # 내 프로젝트 노드는 이름으로
+        assert "비밀노드" not in flat  # 타 프로젝트 노드는 마스킹돼 이름이 새지 않음
+        assert None in flat  # 타 프로젝트 Node → None
+        assert "비밀노드" not in {n["name"] for n in res["graph"]["nodes"]}  # graph도 격리
+    finally:
+        neo4j_service.delete_project(other["id"])
+
+
+def test_run_read_query_rows_scrub_internal_meta(project):
+    # MUST-FIX-1: properties(n) 맵 반환에서 내부 메타(_project/_name)가 제거된다.
+    from app import neo4j_service
+
+    neo4j_service.ingest(project["id"], _ext())
+    res = neo4j_service.run_read_query(
+        project["id"],
+        "MATCH (n:`_Entity` {_project: $pid, _name: '녹조'}) RETURN properties(n) AS p",
+    )
+    p = res["rows"][0][0]
+    assert "_project" not in p and "_name" not in p
+    assert p.get("description") == "남조류 과다 증식"
+
+
+def test_api_query_rejects_write_cypher(project, monkeypatch):
+    # 라우터: generate_query가 쓰기 Cypher를 내놔도 정적 검증에서 막혀 200 + error(무해).
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app.main import app
+    from app.routers import projects as prj
+    from app.text_to_cypher import _QueryOut
+
+    monkeypatch.setattr(settings, "anthropic_api_key", "dummy", raising=False)
+    monkeypatch.setattr(
+        prj,
+        "generate_query",
+        lambda *a, **k: _QueryOut(
+            cypher="MATCH (n:`_Entity` {_project: $pid}) DETACH DELETE n",
+            explanation="위험",
+            result_kind="graph",
+        ),
+    )
+    client = TestClient(app)
+    r = client.post(f"/api/projects/{project['id']}/query", json={"question": "다 지워줘"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["error"]  # 정적 검증에서 거부
+    assert body["graph"]["nodes"] == []
+
+
+def test_api_query_graph_result(project, monkeypatch):
+    # 라우터: 정상 읽기 Cypher → 그래프 결과 반환(end-to-end, Claude만 모킹).
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app.main import app
+    from app.routers import projects as prj
+    from app.text_to_cypher import _QueryOut
+
+    neo4j_service_ingest(project["id"])
+    monkeypatch.setattr(settings, "anthropic_api_key", "dummy", raising=False)
+    monkeypatch.setattr(
+        prj,
+        "generate_query",
+        lambda *a, **k: _QueryOut(
+            cypher="MATCH (n:`_Entity` {_project: $pid}) RETURN n LIMIT 100",
+            explanation="전체 노드",
+            result_kind="graph",
+        ),
+    )
+    client = TestClient(app)
+    r = client.post(f"/api/projects/{project['id']}/query", json={"question": "전체 노드"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert not body["error"]
+    assert body["cypher"].startswith("MATCH")
+    assert "녹조" in {n["name"] for n in body["graph"]["nodes"]}
+
+
+def neo4j_service_ingest(pid):
+    from app import neo4j_service
+
+    neo4j_service.ingest(pid, _ext())

@@ -6,12 +6,15 @@ Neo4j 연결 불가는 503으로 변환한다. extract는 Claude를 호출(과�
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException
+from neo4j.exceptions import Neo4jError
 from pydantic import BaseModel, Field, field_validator
 
 from ..claude_extractor import extract
+from ..cypher_builder import assert_read_only_cypher
 from ..models import Extraction, _clean_label_or_type, _clean_value
 from ..neo4j_service import (
     Neo4jUnavailable,
@@ -23,7 +26,11 @@ from ..neo4j_service import (
     get_project,
     ingest,
     list_projects,
+    run_read_query,
 )
+from ..text_to_cypher import generate_query
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -40,6 +47,25 @@ class ExtractRequest(BaseModel):
 class IngestResponse(BaseModel):
     stats: dict[str, Any]
     graph: dict[str, Any]
+
+
+class QueryRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+
+
+class QueryResponse(BaseModel):
+    """자연어 탐색 결과. cypher/explanation은 항상 채우고(투명성), graph/rows는 실행 성공 시.
+
+    error가 비어있지 않으면 변환·검증·실행 중 문제가 있었다는 뜻(HTTP는 200 — 재질문 유도).
+    """
+
+    cypher: str = ""
+    explanation: str = ""
+    result_kind: str = "none"  # graph | table | none
+    graph: dict[str, Any] = Field(default_factory=lambda: {"nodes": [], "links": []})
+    rows: list = Field(default_factory=list)
+    columns: list = Field(default_factory=list)
+    error: str = ""
 
 
 class EntityRef(BaseModel):
@@ -130,6 +156,65 @@ def get_graph(project_id: str) -> dict:
     """프로젝트 지식그래프({nodes, links})."""
     _require_project(project_id)
     return _svc(fetch_project_graph, project_id)
+
+
+@router.post("/{project_id}/query", response_model=QueryResponse)
+def post_query(project_id: str, req: QueryRequest) -> QueryResponse:
+    """자연어 질문으로 지식그래프를 탐색한다(text-to-cypher, 읽기 전용).
+
+    흐름: 스키마 힌트 수집 → generate_query(Claude 호출/과금) → assert_read_only_cypher(정적
+    검증) → run_read_query(READ 트랜잭션 실행) → 그래프/표 반환. 변환 실패·검증 실패·문법/실행
+    오류는 200 + error(재질문 유도), Neo4j 연결 불가는 503.
+    """
+    _require_project(project_id)
+
+    # 스키마 힌트(정확한 라벨·이름 사용 유도) — 기존 그래프 조회 재사용
+    graph = _svc(fetch_project_graph, project_id)
+    names = [n["name"] for n in graph["nodes"]]
+    types = sorted({t for n in graph["nodes"] for t in n.get("types", [])})
+    rel_types = sorted({l["type"] for l in graph["links"]})
+
+    out = generate_query(req.question, types=types, rel_types=rel_types, entity_names=names)
+    if out is None or not (out.cypher or "").strip():
+        return QueryResponse(
+            explanation=(out.explanation if out else ""),
+            result_kind=(out.result_kind if out else "none"),
+            error="질문을 Cypher로 변환하지 못했습니다. Claude 키가 없거나, 질문을 더 구체적으로 바꿔 보세요.",
+        )
+
+    cypher = out.cypher.strip()
+
+    # 정적 안전 검증(읽기 전용 · 단일 문 · 프로젝트 격리 $pid)
+    try:
+        assert_read_only_cypher(cypher)
+    except ValueError as e:
+        return QueryResponse(
+            cypher=cypher, explanation=out.explanation, result_kind=out.result_kind, error=str(e)
+        )
+
+    # 실행: READ 트랜잭션. 연결 불가는 503, 문법/실행 오류(쓰기 절이 READ에서 거부되는 경우 포함)는
+    # 200 + error로 우아하게 열화(사용자가 질문을 바꿔 재시도).
+    try:
+        result = run_read_query(project_id, cypher)
+    except Neo4jUnavailable as e:
+        raise HTTPException(status_code=503, detail=f"Neo4j 연결 불가: {e}") from e
+    except Neo4jError as e:
+        logger.info("읽기 쿼리 실행 거부/오류: %s", type(e).__name__)
+        return QueryResponse(
+            cypher=cypher,
+            explanation=out.explanation,
+            result_kind=out.result_kind,
+            error="이 쿼리는 실행할 수 없습니다(문법 오류이거나 읽기 전용이 아님). 질문을 바꿔 다시 시도해 주세요.",
+        )
+
+    return QueryResponse(
+        cypher=cypher,
+        explanation=out.explanation,
+        result_kind=out.result_kind,
+        graph=result["graph"],
+        rows=result["rows"],
+        columns=result["columns"],
+    )
 
 
 @router.delete("/{project_id}/entities", response_model=IngestResponse)

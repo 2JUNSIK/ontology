@@ -570,6 +570,30 @@ input[type="checkbox"] {
   padding: 0 24px;
 }
 
+/* ===================== 지식 탐색(생성된 Cypher) ===================== */
+.query-cypher {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+.query-cypher-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.query-cypher pre {
+  margin: 0;
+  font-family: "SF Mono", ui-monospace, "D2Coding", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ===================== 추출 미리보기 ===================== */
 .card.prev {
   padding: 14px 16px;

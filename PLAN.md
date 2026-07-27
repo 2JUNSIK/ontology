@@ -35,8 +35,9 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 
 ## 진행 현황 (2026-07-27 기준)
 
-**완료: N1~N7** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리).
-end-to-end 동작 확인. **다음: 프론트 디자인/기능 확장 계속.**
+**완료: N1~N8** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
+**자연어 그래프 탐색(text-to-cypher, 읽기 경로)**). end-to-end 동작 확인. 앱이 이제 입력(쓰기)뿐
+아니라 **자연어 질의로 탐색(읽기)** 까지 하는 양방향이 됐다. **다음: 프론트 디자인/기능 확장 계속.**
 
 > **git 상태**: N6·N7은 각각 피처 브랜치에 있고 **아직 main 미머지**다. `main`=origin/main(구
 > 상태), `n6-cleanup`(N6 커밋), `feat-knowledge-inventory`(N7 = 지식 현황+세로 레이아웃+삭제+
@@ -139,6 +140,7 @@ class Extraction(BaseModel):   # Claude 추출 결과(미리보기/ingest 공용
 | GET | `/api/projects/{id}/graph` | – | `{nodes, links}` |
 | DELETE | `/api/projects/{id}/entities` | `{name}` | `{stats, graph}` (노드+연결관계 삭제) |
 | DELETE | `/api/projects/{id}/relations` | `{source, target, type}` | `{stats, graph}` (관계만 삭제) |
+| POST | `/api/projects/{id}/query` | `{question}` | `{cypher, explanation, graph, rows, columns, error}` (자연어 탐색, Claude 호출) |
 
 삭제 값(이름·관계타입)은 ingest와 동일하게 정제(NFC+trim, `_clean_value`/`_clean_label_or_type`)해
 저장된 `_name`과 매칭한다. 관계타입은 `type(r)=$rtype` 값 비교 → 동적 식별자 미삽입(인젝션 안전).
@@ -195,6 +197,14 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
 - **[x] N7** 지식 현황(데이터 관리) — 노드·관계 표 + 개별 삭제(`delete_entity`/`delete_relation`,
   `DELETE /entities`·`/relations`, 인젝션 안전) + 좌우→세로 레이아웃 재구성 + 클라이언트
   페이지네이션(10개/페이지). 통합/검증 테스트 추가, 적대적 검수 통과.
+- **[x] N8** 자연어 그래프 탐색(**text-to-cypher, 읽기 경로**) — `text_to_cypher.generate_query`
+  (자연어→읽기전용 Cypher, 구조화 출력 + 캐시 + 우아한 열화), `cypher_builder.assert_read_only_cypher`
+  (정적 안전 검증: 리터럴/주석 마스킹 + 쓰기·CALL 금지 + `$pid`/`_project` 필터 강제),
+  `neo4j_service.run_read_query`(READ 트랜잭션 실행 + 결과 매핑 `_collect_graph`/`_scalarize` —
+  **그래프·rows 모두 프로젝트 사후 필터 + 내부 메타 스크럽**), `POST /query` 라우터,
+  프론트 `QueryPanel`(생성 Cypher 표시 + 결과 그래프 + 표) + `KnowledgeInventory` readOnly 재사용.
+  **안전 3중 방어**(정적 검증 → READ access mode 쓰기 거부 → 결과 사후 격리 필터). 단위/통합/검증
+  테스트 추가, 적대적 검수 후 must-fix 2건(rows 격리 유출·`$pid` substring 우회) 반영.
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

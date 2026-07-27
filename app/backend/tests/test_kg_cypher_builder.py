@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.cypher_builder import (
     ENTITY_BASE_LABEL,
+    assert_read_only_cypher,
     build_entity_constraint,
     build_ingest_statements,
 )
@@ -195,3 +196,143 @@ def test_ingest_dedup_upgrades_empty_description():
     stmts = build_ingest_statements("p", ext)
     rows = _by_kind(stmts, "relation")[0].params["rows"]
     assert rows[0]["description"] == "채움"  # 빈 설명은 비어있지 않은 것으로 승격
+
+
+# ============================================================
+# 읽기 경로(text-to-cypher): assert_read_only_cypher 정적 검증
+# ============================================================
+
+# 정상 통과: MATCH/WHERE/RETURN + $pid 프로젝트 필터
+_OK_QUERY = (
+    "MATCH (n:`_Entity` {_project: $pid})-[r]-(m:`_Entity` {_project: $pid}) "
+    "RETURN n, r, m LIMIT 100"
+)
+
+
+def test_read_only_accepts_valid_match():
+    assert assert_read_only_cypher(_OK_QUERY) is None
+
+
+def test_read_only_accepts_aggregation_with_pid():
+    q = "MATCH (n:`_Entity` {_project: $pid}) RETURN count(n) AS c"
+    assert assert_read_only_cypher(q) is None
+
+
+def test_read_only_allows_trailing_semicolon():
+    assert assert_read_only_cypher(_OK_QUERY + " ;") is None
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "MATCH (n {_project:$pid}) DETACH DELETE n",
+        "MATCH (n {_project:$pid}) DELETE n",
+        "MATCH (n {_project:$pid}) SET n.x = 1 RETURN n",
+        "MATCH (n {_project:$pid}) REMOVE n:Label RETURN n",
+        "CREATE (n {_project:$pid}) RETURN n",
+        "MERGE (n {_project:$pid}) RETURN n",
+        "MATCH (n {_project:$pid}) WITH n CALL db.labels() YIELD label RETURN label",
+        "CALL apoc.periodic.iterate('MATCH (n) RETURN n','DELETE n',{}) YIELD batches RETURN batches",
+        "LOAD CSV FROM 'file:///x.csv' AS row RETURN row",
+        "MATCH (n {_project:$pid}) FOREACH (x IN [1] | SET n.y = x) RETURN n",
+        "DROP CONSTRAINT c",
+        "USE somedb MATCH (n {_project:$pid}) RETURN n",
+    ],
+)
+def test_read_only_rejects_write_keywords(bad):
+    with pytest.raises(ValueError):
+        assert_read_only_cypher(bad)
+
+
+def test_read_only_rejects_lowercase_write_keyword():
+    # 대소문자 무시 — 소문자 delete도 거부
+    with pytest.raises(ValueError):
+        assert_read_only_cypher("match (n {_project:$pid}) delete n")
+
+
+def test_read_only_rejects_multiple_statements():
+    with pytest.raises(ValueError):
+        assert_read_only_cypher(
+            "MATCH (n {_project:$pid}) RETURN n; MATCH (m {_project:$pid}) RETURN m"
+        )
+
+
+def test_read_only_rejects_missing_pid():
+    # $pid 없음 → 프로젝트 격리 붕괴 위험 → 거부
+    with pytest.raises(ValueError):
+        assert_read_only_cypher("MATCH (n:`_Entity`) RETURN n LIMIT 10")
+
+
+def test_read_only_rejects_empty():
+    for bad in ["", "   ", None]:
+        with pytest.raises(ValueError):
+            assert_read_only_cypher(bad)  # type: ignore[arg-type]
+
+
+def test_read_only_ignores_keyword_inside_string_literal():
+    # 리터럴 안의 'DELETE'는 절이 아니라 검색어 → 통과해야 한다(오탐 없음).
+    q = "MATCH (n:`_Entity` {_project: $pid}) WHERE n._name = 'DELETE ME' RETURN n"
+    assert assert_read_only_cypher(q) is None
+
+
+def test_read_only_ignores_semicolon_inside_string_literal():
+    q = "MATCH (n:`_Entity` {_project: $pid}) WHERE n._name = 'a;b' RETURN n"
+    assert assert_read_only_cypher(q) is None
+
+
+def test_read_only_ignores_keyword_inside_backtick_identifier():
+    # 백틱 식별자 안의 'DELETE'는 라벨 이름 → 절이 아니므로 통과(오탐 없음).
+    q = "MATCH (n:`DELETE` {_project: $pid}) RETURN n"
+    assert assert_read_only_cypher(q) is None
+
+
+def test_read_only_pid_only_inside_literal_is_rejected():
+    # $pid가 리터럴 안에만 있으면 실제 파라미터가 아니므로 거부돼야 한다(마스킹 후 미검출).
+    q = "MATCH (n:`_Entity`) WHERE n._name = '$pid' RETURN n"
+    with pytest.raises(ValueError):
+        assert_read_only_cypher(q)
+
+
+def test_read_only_does_not_false_positive_on_settings_identifier():
+    # 'SET'이 식별자(settings)의 일부일 때 오탐하지 않는다(\b 단어 경계).
+    q = "MATCH (n:`_Entity` {_project: $pid}) RETURN n.settings AS s"
+    assert assert_read_only_cypher(q) is None
+
+
+# ---- 강화(MUST-FIX): 격리 검증 + 주석 마스킹 ----
+
+def test_read_only_rejects_missing_project_prop():
+    # $pid는 있어도 _project 필터가 없으면 거부(격리 필터 누락).
+    with pytest.raises(ValueError):
+        assert_read_only_cypher("MATCH (n:`_Entity`) WHERE n._name = $pid RETURN n")
+
+
+def test_read_only_rejects_pid_only_in_comment():
+    # $pid/_project가 주석 안에만 있으면 실제 필터가 아니므로 거부(주석 우회 차단).
+    with pytest.raises(ValueError):
+        assert_read_only_cypher("MATCH (m:`_Entity`) RETURN m LIMIT 100 // needs $pid _project")
+    with pytest.raises(ValueError):
+        assert_read_only_cypher("MATCH (m:`_Entity`) RETURN m /* $pid _project */ LIMIT 100")
+
+
+def test_read_only_rejects_pid_substring_lookalike():
+    # $pidding 등 substring 유사어는 $pid 파라미터로 인정하지 않는다(단어 경계).
+    with pytest.raises(ValueError):
+        assert_read_only_cypher("MATCH (n:`_Entity` {_project: $pidding}) RETURN n")
+
+
+def test_read_only_ignores_keyword_in_line_comment():
+    # 한 줄 주석 안의 쓰기 키워드는 무시(오탐 없음). 정상 통과.
+    q = "MATCH (n:`_Entity` {_project: $pid}) RETURN n // 이 쿼리는 DELETE 안 함"
+    assert assert_read_only_cypher(q) is None
+
+
+def test_read_only_ignores_keyword_in_block_comment():
+    q = "/* SET REMOVE 주의 */ MATCH (n:`_Entity` {_project: $pid}) RETURN n"
+    assert assert_read_only_cypher(q) is None
+
+
+def test_read_only_allows_trailing_line_comment_after_semicolon():
+    # 세미콜론 뒤 주석만 남으면(다중문 아님) 통과.
+    q = "MATCH (n:`_Entity` {_project: $pid}) RETURN n ; // 끝"
+    assert assert_read_only_cypher(q) is None

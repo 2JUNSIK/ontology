@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import OrderedDict
 from dataclasses import dataclass, field
 
@@ -150,3 +151,136 @@ def build_ingest_statements(project_id: str, extraction: Extraction) -> list[Cyp
         )
 
     return stmts
+
+
+# ==================================================================
+# v2 읽기 경로(text-to-cypher): LLM 생성 Cypher의 정적 안전 검증 — 순수 함수
+# ==================================================================
+
+# 읽기 전용 위반으로 간주하는 절/프로시저 키워드(대문자·단어 경계로 검사).
+#
+# 이 정적 검사는 **조기 거부 + 명확한 한글 에러**를 위한 1차 방어선이다. 실제 쓰기 차단의
+# 주 방어선은 neo4j_service가 READ access mode(session.execute_read) 트랜잭션으로만
+# 실행한다는 점이다 — 블랙리스트는 원리상 우회 가능성이 있으므로 access mode가 실질
+# 방어선이다(CLAUDE.md 불변식 §3의 '사용자/LLM 문자열' 규약을 읽기 경로로 확장).
+#
+# CALL은 읽기 프로시저(db.labels 등)도 있지만 apoc/db/dbms 쓰기·부작용 위험이 커서 전면
+# 차단한다(탐색은 순수 MATCH/WHERE/RETURN으로 충분). LOAD는 LOAD CSV, CREATE는 CREATE
+# INDEX/CONSTRAINT까지 포괄한다.
+_WRITE_KEYWORDS: tuple[str, ...] = (
+    "CREATE", "MERGE", "DELETE", "SET", "REMOVE", "DETACH", "DROP",
+    "FOREACH", "LOAD", "CALL", "USE",
+)
+
+# 프로젝트 격리 필터에 반드시 등장해야 하는 요소. 실행 시 {"pid": project_id}만 바인딩하므로
+# LLM은 $pid를 써야 하고, 값은 문자열 삽입이 아니라 파라미터로만 들어간다. $pid는 단어 경계로
+# 검사해 substring 우회($pidding 등)를 막고, _project 속성 참조도 함께 강제한다.
+#
+# 주의(설계 한계): LLM이 만든 Cypher로 프로젝트 격리를 '검증'하는 것은 원리적으로 불완전하다
+# (UNION의 다른 leg, 필터 없는 추가 MATCH 등을 정적으로 다 막긴 어렵다). 이 정적 검사는 흔한
+# 실수·우회를 조기 차단하는 보조선이고, **실질 격리 방어선은 neo4j_service의 결과 사후 필터**
+# (그래프 노드/관계 + rows 스칼라 모두 _project != project_id를 드롭)다.
+_PID_PARAM_RE = re.compile(r"\$pid(?![0-9A-Za-z_$])")
+_PROJECT_PROP = "_project"
+
+
+def _mask_literals(cypher: str) -> str:
+    """문자열 리터럴('...', "...")·백틱 식별자(`...`)·주석(//, /* */) 내부를 공백으로 치환한
+    스캔용 사본.
+
+    이 구간들 안의 키워드/세미콜론/$pid/_project가 검사에서 오탐(예: `RETURN '삭제'`)되거나
+    반대로 우회(예: 주석 `// $pid`로 격리 검사를 만족시키기)되지 않도록, 검사 전에 무력화한다.
+    길이·인덱스는 보존(공백 치환). Cypher 문자열 이스케이프는 백슬래시(`\\'`), 백틱 이스케이프는
+    두 개(``)로 처리한다.
+    """
+    out: list[str] = []
+    i, n = 0, len(cypher)
+    while i < n:
+        c = cypher[i]
+        if c in ("'", '"'):
+            quote = c
+            out.append(" ")
+            i += 1
+            while i < n:
+                if cypher[i] == "\\" and i + 1 < n:  # 백슬래시 이스케이프 → 두 글자 스킵
+                    out.append("  ")
+                    i += 2
+                    continue
+                if cypher[i] == quote:
+                    out.append(" ")
+                    i += 1
+                    break
+                out.append(" ")
+                i += 1
+            continue
+        if c == "`":
+            out.append(" ")
+            i += 1
+            while i < n:
+                if cypher[i] == "`" and i + 1 < n and cypher[i + 1] == "`":  # `` 이스케이프
+                    out.append("  ")
+                    i += 2
+                    continue
+                if cypher[i] == "`":
+                    out.append(" ")
+                    i += 1
+                    break
+                out.append(" ")
+                i += 1
+            continue
+        if c == "/" and i + 1 < n and cypher[i + 1] == "/":  # 한 줄 주석 → 줄 끝까지
+            while i < n and cypher[i] != "\n":
+                out.append(" ")
+                i += 1
+            continue
+        if c == "/" and i + 1 < n and cypher[i + 1] == "*":  # 블록 주석 → */ 까지
+            out.append("  ")
+            i += 2
+            while i < n:
+                if cypher[i] == "*" and i + 1 < n and cypher[i + 1] == "/":
+                    out.append("  ")
+                    i += 2
+                    break
+                out.append(" ")
+                i += 1
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def assert_read_only_cypher(cypher: str) -> None:
+    """LLM이 생성한 Cypher가 '읽기 전용 · 단일 문 · 프로젝트 격리($pid)'인지 정적 검증.
+
+    위반 시 ValueError(한글 사유)를 던지고, 통과하면 None을 반환한다. 부수효과·Neo4j
+    접근이 없는 순수 함수라 단위테스트로 검증한다(불변식 §2). 검사 순서는 '더 구체적인
+    사유부터'가 아니라 결정적(고정)이다.
+    """
+    if not isinstance(cypher, str) or not cypher.strip():
+        raise ValueError("빈 쿼리입니다")
+
+    scan = _mask_literals(cypher)
+
+    # 1) 다중 문 금지: 리터럴 밖의 세미콜론은 끝(trailing) 1개만 허용한다.
+    semi = scan.find(";")
+    if semi != -1 and scan[semi + 1:].strip():
+        raise ValueError("여러 문(세미콜론 구분)은 허용되지 않습니다 — 한 번에 한 쿼리만 실행합니다")
+
+    # 2) 쓰기/DDL/프로시저 키워드 금지(리터럴·백틱은 이미 마스킹됨).
+    upper = scan.upper()
+    for kw in _WRITE_KEYWORDS:
+        if re.search(rf"\b{kw}\b", upper):
+            raise ValueError(
+                f"읽기 전용(탐색) 쿼리만 허용됩니다 — 금지된 절/프로시저 '{kw}'가 포함돼 있습니다"
+            )
+
+    # 3) 프로젝트 격리(보조선): $pid 파라미터(단어 경계)와 _project 속성 참조가 모두 있어야 한다.
+    #    실질 방어선은 neo4j_service의 결과 사후 필터다(위 상수 주석 참조).
+    if not _PID_PARAM_RE.search(scan):
+        raise ValueError(
+            "프로젝트 격리를 위해 쿼리에는 $pid 파라미터가 있어야 합니다(예: {_project: $pid})"
+        )
+    if _PROJECT_PROP not in scan:
+        raise ValueError(
+            "프로젝트 격리를 위해 쿼리에는 _project 필터가 있어야 합니다(예: {_project: $pid})"
+        )

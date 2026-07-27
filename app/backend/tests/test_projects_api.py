@@ -45,6 +45,21 @@ def test_extract_rejects_empty_text():
     assert r.status_code == 422
 
 
+def test_query_rejects_empty_question():
+    r = client.post("/api/projects/anyid/query", json={"question": ""})
+    assert r.status_code == 422
+
+
+def test_query_requires_question():
+    r = client.post("/api/projects/anyid/query", json={})
+    assert r.status_code == 422
+
+
+def test_query_rejects_too_long_question():
+    r = client.post("/api/projects/anyid/query", json={"question": "가" * 2001})
+    assert r.status_code == 422
+
+
 # ---- 삭제 요청모델 정규화(ingest와 대칭 — '조용한 무삭제' 방지) : Neo4j 불필요 ----
 
 

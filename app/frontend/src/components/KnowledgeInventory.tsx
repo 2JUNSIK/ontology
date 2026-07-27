@@ -3,9 +3,10 @@ import type { GraphData } from "../types";
 
 interface Props {
   data: GraphData;
-  busyKey: string | null; // 삭제 진행 중인 항목 키(중복 클릭 방지 + 스피너 표시)
-  onDeleteEntity: (name: string) => void;
-  onDeleteRelation: (source: string, target: string, type: string) => void;
+  busyKey?: string | null; // 삭제 진행 중인 항목 키(중복 클릭 방지 + 스피너 표시)
+  onDeleteEntity?: (name: string) => void;
+  onDeleteRelation?: (source: string, target: string, type: string) => void;
+  readOnly?: boolean; // true면 삭제 컬럼을 숨긴다(지식 탐색 결과 표에서 재사용)
 }
 
 export const entKey = (name: string) => `e:${name}`;
@@ -43,11 +44,12 @@ function Pager({
 // 노드/관계를 "데이터"로 보여주고 개별 삭제한다. 10개 초과 시 페이지로 나눈다.
 export default function KnowledgeInventory({
   data,
-  busyKey,
+  busyKey = null,
   onDeleteEntity,
   onDeleteRelation,
+  readOnly = false,
 }: Props) {
-  const anyBusy = busyKey !== null;
+  const anyBusy = !readOnly && busyKey !== null;
 
   const [entPage, setEntPage] = useState(1);
   const [relPage, setRelPage] = useState(1);
@@ -92,13 +94,13 @@ export default function KnowledgeInventory({
                     <th>이름</th>
                     <th>타입</th>
                     <th>설명</th>
-                    <th className="actions" />
+                    {!readOnly && <th className="actions" />}
                   </tr>
                 </thead>
                 <tbody>
                   {entRows.map((n) => {
                     const key = entKey(n.name);
-                    const busy = busyKey === key;
+                    const busy = !readOnly && busyKey === key;
                     return (
                       <tr key={key} className={busy ? "row-busy" : ""}>
                         <td><b>{n.name}</b></td>
@@ -112,15 +114,17 @@ export default function KnowledgeInventory({
                           )}
                         </td>
                         <td className="kg-desc">{n.description || <span className="muted">—</span>}</td>
-                        <td className="actions">
-                          <button
-                            className="mini danger"
-                            disabled={anyBusy}
-                            onClick={() => onDeleteEntity(n.name)}
-                          >
-                            {busy ? "삭제 중…" : "삭제"}
-                          </button>
-                        </td>
+                        {!readOnly && (
+                          <td className="actions">
+                            <button
+                              className="mini danger"
+                              disabled={anyBusy}
+                              onClick={() => onDeleteEntity?.(n.name)}
+                            >
+                              {busy ? "삭제 중…" : "삭제"}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -152,28 +156,30 @@ export default function KnowledgeInventory({
                     <th>관계</th>
                     <th>도착</th>
                     <th>설명</th>
-                    <th className="actions" />
+                    {!readOnly && <th className="actions" />}
                   </tr>
                 </thead>
                 <tbody>
                   {relRows.map((l) => {
                     const key = relKey(l.source, l.type, l.target);
-                    const busy = busyKey === key;
+                    const busy = !readOnly && busyKey === key;
                     return (
                       <tr key={key} className={busy ? "row-busy" : ""}>
                         <td className="mono">{l.source}</td>
                         <td><span className="badge rel">{l.type}</span></td>
                         <td className="mono">{l.target}</td>
                         <td className="kg-desc">{l.description || <span className="muted">—</span>}</td>
-                        <td className="actions">
-                          <button
-                            className="mini danger"
-                            disabled={anyBusy}
-                            onClick={() => onDeleteRelation(l.source, l.target, l.type)}
-                          >
-                            {busy ? "삭제 중…" : "삭제"}
-                          </button>
-                        </td>
+                        {!readOnly && (
+                          <td className="actions">
+                            <button
+                              className="mini danger"
+                              disabled={anyBusy}
+                              onClick={() => onDeleteRelation?.(l.source, l.target, l.type)}
+                            >
+                              {busy ? "삭제 중…" : "삭제"}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}

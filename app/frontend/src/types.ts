@@ -55,3 +55,14 @@ export interface IngestResponse {
   stats: Record<string, any>;
   graph: GraphData;
 }
+
+// ---- 자연어 탐색(text-to-cypher, /api/projects/{id}/query) ----
+export interface QueryResponse {
+  cypher: string; // 생성·실행된 읽기 전용 Cypher(투명성)
+  explanation: string; // 이 질의가 무엇을 조회하는지(한국어)
+  result_kind: string; // graph | table | none (표시 힌트)
+  graph: GraphData; // 관계·경로 결과(그래프 시각화)
+  rows: any[][]; // 스칼라/집계 결과(표)
+  columns: string[]; // rows의 열 이름
+  error: string; // 비어있지 않으면 변환·검증·실행 문제(재질문 유도)
+}

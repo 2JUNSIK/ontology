@@ -1,10 +1,10 @@
 // 백엔드(FastAPI, :8000) 클라이언트. 엔드포인트는 PLAN.md §5 참조 (v2).
 import axios from "axios";
-import type { Extraction, GraphData, IngestResponse, Project } from "./types";
+import type { Extraction, GraphData, IngestResponse, Project, QueryResponse } from "./types";
 
 const BASE_URL = "http://localhost:8000";
 
-// /extract 는 Claude 호출(최대 max_tokens=4000)로 지연될 수 있어 여유 있게 잡는다.
+// /extract·/query 는 Claude 호출로 지연될 수 있어 타임아웃을 여유 있게 잡는다.
 const client = axios.create({ baseURL: BASE_URL, timeout: 120000 });
 
 export async function listProjects(): Promise<Project[]> {
@@ -68,6 +68,15 @@ export async function deleteRelation(
   const { data } = await client.delete<IngestResponse>(
     `/api/projects/${encodeURIComponent(projectId)}/relations`,
     { data: { source, target, type } },
+  );
+  return data;
+}
+
+// 자연어 질문 → Cypher 생성·실행(읽기 전용). 실제 Claude API를 호출한다(키가 있으면 과금).
+export async function queryGraph(projectId: string, question: string): Promise<QueryResponse> {
+  const { data } = await client.post<QueryResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/query`,
+    { question },
   );
   return data;
 }

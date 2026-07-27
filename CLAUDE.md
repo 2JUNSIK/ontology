@@ -4,40 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N7 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N8 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
 백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **N6**에서 구 v1(설문/스키마) 코드를 완전 제거해
-코드베이스가 v2만 남았고, **N7**에서 "지식 현황"(노드·관계 데이터 표 + 개별 삭제 + 10개/페이지
-페이지네이션)과 세로 레이아웃(지식 입력→지식 현황→지식 그래프)을 추가했다. 다음: 프론트 디자인/기능 확장 계속.
+코드베이스가 v2만 남았고, **N7**에서 "지식 현황"(노드·관계 데이터 표 + 개별 삭제 + 페이지네이션)과
+세로 레이아웃을 추가했다. **N8**에서 **자연어 그래프 탐색(text-to-cypher, 읽기 경로)** 을 추가해 —
+자연어 질문을 Claude가 **읽기전용 Cypher**로 변환→실행→그래프/표로 — 앱이 입력(쓰기)뿐 아니라
+**탐색(읽기)** 까지 하는 양방향이 됐다. 다음: 프론트 디자인/기능 확장 계속.
 
-> **git 상태**: N6·N7은 각각 피처 브랜치에 있고 **아직 main 미머지**다. `main`=origin/main(구
-> 상태), `n6-cleanup`(N6 커밋), `feat-knowledge-inventory`(N7 = 지식 현황+세로 레이아웃+삭제+
-> 페이지네이션, n6-cleanup 위에 스택). `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. 권장
-> 머지 순서: n6-cleanup → feat-knowledge-inventory. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태**: N6·N7·N8은 각각 피처 브랜치에 있고 **아직 main 미머지**다. `main`=origin/main(구
+> 상태), `n6-cleanup`(N6), `feat-knowledge-inventory`(N7, n6-cleanup 위 스택),
+> `feat-graph-query`(N8 = 자연어 탐색, feat-knowledge-inventory 위 스택). `gh` 미설치 → PR은 push
+> 후 반환된 웹 링크로 연다. 권장 머지 순서: n6-cleanup → feat-knowledge-inventory →
+> feat-graph-query. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
-  API(§5), 마일스톤(N1~N7, §10), "진행 현황"이 모두 여기 있다.
+  API(§5), 마일스톤(N1~N8, §10), "진행 현황"이 모두 여기 있다.
 - **현재 코드**(`app/backend/app/`):
   - [v2 핵심] `models.py`(Entity/Relation/Extraction + 식별자 방어선), `cypher_builder.py`
-    (`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`), `neo4j_service.py`
-    (프로젝트 CRUD·`ingest`·`fetch_project_graph`·`delete_entity`·`delete_relation`),
-    `claude_extractor.py`, `routers/projects.py`(+ `DELETE /entities`·`/relations`),
-    `config.py`, `main.py`.
+    (`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`, +읽기경로
+    `assert_read_only_cypher`), `neo4j_service.py`(프로젝트 CRUD·`ingest`·`fetch_project_graph`·
+    `delete_entity`·`delete_relation`, +읽기경로 `run_read_query`/`_collect_graph`/`_scalarize`),
+    `claude_extractor.py`, `text_to_cypher.py`(자연어→읽기전용 Cypher 생성),
+    `routers/projects.py`(+ `DELETE /entities`·`/relations`, `POST /query`), `config.py`, `main.py`.
   - [v1 제거 완료(N6)] `survey.py`·`claude_enricher.py`·`routers/{survey,schema,graph}.py`·
     `cypher_builder`의 스키마-메타 함수·`neo4j_service`의 `commit_schema`/`fetch_graph`·
     `models.py`의 v1 모델(OntologySchema/NodeLabel/…)·`seed_ontology.SEED_ONTOLOGY`를 모두 삭제.
     **`seed_ontology.py`의 `DOMAIN_GUIDE`(+임계값·수질항목 상수)는 extractor가 재사용하므로 유지.**
   - 프론트(`app/frontend/src/`): `App.tsx`, `api.ts`, `types.ts`,
-    `components/{ProjectList,Workspace,ExtractionPreview,KnowledgeInventory,GraphView}.tsx`.
-    Workspace는 **세로 스택**(지식 입력 → 지식 현황 → 지식 그래프). `KnowledgeInventory`는 노드·
-    관계 데이터 표 + 개별 삭제(백엔드 `DELETE /entities`·`/relations`) + **10개 초과 시 클라이언트
-    페이지네이션**. (구 `SurveyWizard`/`SchemaReview`는 이미 삭제.)
+    `components/{ProjectList,Workspace,ExtractionPreview,KnowledgeInventory,QueryPanel,GraphView}.tsx`.
+    Workspace는 **세로 스택**(지식 입력 → 지식 현황 → **지식 탐색** → 지식 그래프). `QueryPanel`은
+    자연어 질의→생성 Cypher 표시→결과 그래프(`GraphView` 재사용)+표(`KnowledgeInventory` `readOnly`
+    재사용). `KnowledgeInventory`는 노드·관계 데이터 표 + 개별 삭제(`DELETE /entities`·`/relations`)
+    + **10개 초과 시 클라이언트 페이지네이션** + `readOnly` prop(탐색 결과 표 재사용).
+    (구 `SurveyWizard`/`SchemaReview`는 이미 삭제.)
 - **명령은 실제로 동작**(venv·node_modules 존재). 개발 중 백엔드(uvicorn :8000)·프론트(vite :5173)
   서버가 백그라운드로 떠 있을 수 있다. **백엔드 코드 변경 시 재시작 필요**(--reload 미사용 시 —
   포트 8000 리스너 kill 후 재기동). 프론트는 Vite HMR로 자동 반영.
-- **테스트 72 passed / 15 skipped**(통합은 opt-in). GitHub <https://github.com/2JUNSIK/ontology.git>
-  (main 브랜치). Windows 11 + PowerShell.
+- **테스트 124 passed / 25 skipped**(통합은 opt-in; `RUN_NEO4J_TESTS=1`로 통합 25개도 전부 통과).
+  GitHub <https://github.com/2JUNSIK/ontology.git> (main 브랜치). Windows 11 + PowerShell.
 
 ### 마일스톤마다 지키는 작업 방식 (사용자 상시 지시)
 코드 작성 후 **커밋 전에** 적대적 서브에이전트로 코드 검수 + 엣지케이스 테스트를 수행하고,
@@ -103,6 +109,12 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
    **식별자(타입 라벨·관계타입)는 화이트리스트(`escape_identifier`=`_clean_label_or_type` 재검증)
    + 백틱**. 동적 라벨/관계타입은 UNWIND로 파라미터화할 수 없으므로 **타입별로 그룹핑해 문 하나당
    검증된 식별자 1개만** 삽입한다. 사용자/LLM 문자열을 식별자 위치에 직접 끼워넣지 말 것.
+   **읽기 경로(text-to-cypher, N8)**: LLM이 생성한 Cypher는 신뢰하지 않는다 — **안전 3중 방어**.
+   (1) `assert_read_only_cypher` 정적 검증(리터럴·주석 마스킹 후 쓰기·`CALL`·다중문 금지 +
+   `$pid`(단어경계)·`_project` 필터 강제), (2) `session.execute_read`(READ access mode)로만 실행해
+   쓰기 절을 **드라이버 레벨에서 거부**, (3) 결과 매핑(`_collect_graph`·`_scalarize`)이 **그래프와
+   rows 모두** `_project != project_id`를 드롭 + 내부 메타(`_`프리픽스) 스크럽. 정적 검증은 보조,
+   **실질 프로젝트 격리는 사후 필터**다(§4). 값은 `$pid` 하나만 바인딩(project_id 문자열 삽입 금지).
 4. **메타 vs 인스턴스 분리 (v2)**: 프로젝트 메타는 `(:_Project {id,name,…})`. 지식 노드는 공통
    기본 라벨 `(:_Entity {_project,_name,description})` + **동적 타입 라벨**(예: `:현상`,`:경보단계`).
    정체성 = **(`_project`,`_name`) 복합 UNIQUE** → 같은 이름 재입력 시 MERGE 병합. 관계는 같은
@@ -139,7 +151,7 @@ cd ..\frontend; npm install; npm run dev     # http://localhost:5173
 ```
 **테스트(핵심 게이트)** — venv의 python으로 직접 실행하는 것이 확실하다:
 ```powershell
-& "app\backend\.venv\Scripts\python.exe" -m pytest app\backend      # 154 passed / 11 skipped
+& "app\backend\.venv\Scripts\python.exe" -m pytest app\backend      # 124 passed / 25 skipped
 # Neo4j 통합 테스트는 opt-in(파괴적) — Neo4j 기동 상태에서만:
 $env:RUN_NEO4J_TESTS=1; & "app\backend\.venv\Scripts\python.exe" -m pytest app\backend\tests\test_kg_integration.py; Remove-Item Env:\RUN_NEO4J_TESTS
 ```

@@ -21,6 +21,7 @@ interface Props {
 const EMPTY: GraphData = { nodes: [], links: [] };
 
 export default function Workspace({ project, onBack }: Props) {
+  const [tab, setTab] = useState<"design" | "use">("design");
   const [graph, setGraph] = useState<GraphData>(EMPTY);
   const [text, setText] = useState("");
   const [extraction, setExtraction] = useState<Extraction | null>(null);
@@ -167,7 +168,23 @@ export default function Workspace({ project, onBack }: Props) {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="workspace-stack">
+      <div className="ws-tabs">
+        <button
+          className={"ws-tab" + (tab === "design" ? " active" : "")}
+          onClick={() => setTab("design")}
+        >
+          지식설계
+        </button>
+        <button
+          className={"ws-tab" + (tab === "use" ? " active" : "")}
+          onClick={() => setTab("use")}
+        >
+          지식활용
+        </button>
+      </div>
+
+      {/* 지식설계 탭: 지식 입력 → 지식 현황 → 지식 그래프 (구축·관리·확인) */}
+      <div className="workspace-stack" style={{ display: tab === "design" ? "flex" : "none" }}>
         {/* 1. 지식 입력 */}
         <div>
           <div className="panel">
@@ -246,10 +263,7 @@ export default function Workspace({ project, onBack }: Props) {
           )}
         </div>
 
-        {/* 3. 지식 탐색 (자연어 → Cypher, 읽기 전용) */}
-        <QueryPanel projectId={project.id} />
-
-        {/* 4. 지식 그래프 */}
+        {/* 3. 지식 그래프 */}
         <div className="panel graph-panel">
           <div className="row between" style={{ marginBottom: 16 }}>
             <h2 className="section-title">지식 그래프</h2>
@@ -265,6 +279,11 @@ export default function Workspace({ project, onBack }: Props) {
             <GraphView data={graph} />
           )}
         </div>
+      </div>
+
+      {/* 지식활용 탭: 자연어 → Cypher 탐색(읽기 전용) */}
+      <div style={{ display: tab === "use" ? "block" : "none" }}>
+        <QueryPanel projectId={project.id} />
       </div>
     </div>
   );

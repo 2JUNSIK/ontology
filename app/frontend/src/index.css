@@ -412,6 +412,33 @@ input[type="checkbox"] {
   margin: 10px 0 2px;
 }
 
+/* 상단 탭: 지식설계 / 지식활용 */
+.ws-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.ws-tab {
+  padding: 12px 20px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.ws-tab:hover {
+  background: transparent;
+  color: var(--text-2);
+}
+.ws-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
 /* 세로 스택: 지식 입력 → 지식 현황 → 지식 그래프 (모두 전체 폭, 같은 너비) */
 .workspace-stack {
   display: flex;

@@ -65,7 +65,6 @@ export default function App() {
             <span className="brand-mark">🌊</span>
             <div>
               <div className="brand-title">지식그래프 빌더</div>
-              <div className="brand-sub">K-water 녹조·수질</div>
             </div>
           </div>
         </div>

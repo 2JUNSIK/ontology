@@ -37,12 +37,13 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 
 **완료: N1~N8** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
 **자연어 그래프 탐색(text-to-cypher, 읽기 경로)**). end-to-end 동작 확인. 앱이 이제 입력(쓰기)뿐
-아니라 **자연어 질의로 탐색(읽기)** 까지 하는 양방향이 됐다. **다음: 프론트 디자인/기능 확장 계속.**
+아니라 **자연어 질의로 탐색(읽기)** 까지 하는 양방향이 됐다. UI는 상단 **지식설계/지식활용 2개
+탭**으로 입력·관리와 탐색을 분리했다(상단 브랜드 부제목은 제거). **다음: 프론트 디자인/기능 확장 계속.**
 
-> **git 상태**: N6·N7은 각각 피처 브랜치에 있고 **아직 main 미머지**다. `main`=origin/main(구
-> 상태), `n6-cleanup`(N6 커밋), `feat-knowledge-inventory`(N7 = 지식 현황+세로 레이아웃+삭제+
-> 페이지네이션, n6-cleanup 위에 스택). `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. 권장
-> 머지 순서: n6-cleanup → feat-knowledge-inventory.
+> **git 상태(2026-07-27)**: **N6·N7은 main에 머지 완료**(`main`=origin/main=`fa0b045`, fast-forward).
+> **N8은 `feat-graph-query`**(자연어 탐색 + 지식설계/지식활용 탭 + 부제목 제거)에 있고 origin에
+> push됨 — main보다 2커밋 앞, **아직 main 미머지**. 머지 끝난 `n6-cleanup`/`feat-knowledge-inventory`는
+> 정리(삭제) 가능. `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
@@ -157,15 +158,17 @@ class Extraction(BaseModel):   # Claude 추출 결과(미리보기/ingest 공용
   묶는다. 스키마 DDL(제약)은 별도 auto-commit(스키마/데이터 혼용 금지 회피).
 - `cypher_builder`는 **순수 함수**(부수효과 없음, 단위테스트 대상).
 
-## 7. 프론트 화면 (2뷰)
+## 7. 프론트 화면 (ProjectList → Workspace)
 
 1. **ProjectList** — 프로젝트 목록/생성/선택/삭제.
-2. **Workspace** — **세로 스택**(전체 폭, 같은 너비):
-   - (a) **지식 입력** — 입력창 + "추출" 버튼(비용 경고) + 추출 **미리보기 패널**
-     (`ExtractionPreview`: 엔티티/관계 체크·편집·삭제 → "그래프에 추가").
-   - (b) **지식 현황**(`KnowledgeInventory`) — 노드·관계를 **데이터 표**로 관리, 행별 **개별 삭제**
-     (노드 삭제 시 연결 관계도 함께 제거 — 확인 다이얼로그). 삭제 결과(0건 포함) 안내.
-   - (c) **지식 그래프**(`GraphView`, 항상 표시) — 노드 클릭 시 속성/타입 패널.
+2. **Workspace** — 상단 **탭 2개**(지식설계 / 지식활용). 탭 전환은 `display` 토글이라 각 탭 상태를
+   보존한다(탐색 결과가 탭 이동으로 사라지지 않음).
+   - **[지식설계]** — 세로 스택(전체 폭): (a) **지식 입력** — 입력창 + "추출"(비용 경고) + 미리보기
+     패널(`ExtractionPreview`: 엔티티/관계 체크·편집·삭제 → "그래프에 추가"); (b) **지식 현황**
+     (`KnowledgeInventory`: 노드·관계 표 + 행별 개별 삭제 + 10개/페이지 페이지네이션);
+     (c) **지식 그래프**(`GraphView`: 누적 시각화, 노드 클릭 시 속성/타입 패널).
+   - **[지식활용]** — **지식 탐색**(`QueryPanel`): 자연어 질문 → 생성 Cypher 표시(투명성) →
+     결과 그래프(`GraphView` 재사용) + 표(`KnowledgeInventory` `readOnly` 재사용). 읽기 전용.
 
 ## 8. 도메인 가이드 (seed_ontology.py 재활용)
 

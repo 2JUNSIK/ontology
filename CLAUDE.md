@@ -11,13 +11,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 코드베이스가 v2만 남았고, **N7**에서 "지식 현황"(노드·관계 데이터 표 + 개별 삭제 + 페이지네이션)과
 세로 레이아웃을 추가했다. **N8**에서 **자연어 그래프 탐색(text-to-cypher, 읽기 경로)** 을 추가해 —
 자연어 질문을 Claude가 **읽기전용 Cypher**로 변환→실행→그래프/표로 — 앱이 입력(쓰기)뿐 아니라
-**탐색(읽기)** 까지 하는 양방향이 됐다. 다음: 프론트 디자인/기능 확장 계속.
+**탐색(읽기)** 까지 하는 양방향이 됐다. UI는 Workspace를 상단 **지식설계/지식활용 2개 탭**으로 나눠
+입력·관리(설계)와 자연어 탐색(활용)을 분리했고, 상단 브랜드 부제목은 제거했다. 다음: 프론트 디자인/기능 확장 계속.
 
-> **git 상태**: N6·N7·N8은 각각 피처 브랜치에 있고 **아직 main 미머지**다. `main`=origin/main(구
-> 상태), `n6-cleanup`(N6), `feat-knowledge-inventory`(N7, n6-cleanup 위 스택),
-> `feat-graph-query`(N8 = 자연어 탐색, feat-knowledge-inventory 위 스택). `gh` 미설치 → PR은 push
-> 후 반환된 웹 링크로 연다. 권장 머지 순서: n6-cleanup → feat-knowledge-inventory →
-> feat-graph-query. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-07-27)**: **N6·N7은 main에 머지 완료**(`main`=origin/main=`fa0b045`, fast-forward
+> push됨). **N8은 `feat-graph-query`**(자연어 탐색 + 지식설계/지식활용 탭 + 부제목 제거)에 있고 origin에
+> push됨 — main보다 2커밋 앞, **아직 main 미머지**. 머지 끝난 `n6-cleanup`/`feat-knowledge-inventory`는
+> 정리(로컬·원격 삭제) 가능. `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. feat-graph-query도
+> ff로 main 머지 가능. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
   API(§5), 마일스톤(N1~N8, §10), "진행 현황"이 모두 여기 있다.
@@ -32,9 +33,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     `cypher_builder`의 스키마-메타 함수·`neo4j_service`의 `commit_schema`/`fetch_graph`·
     `models.py`의 v1 모델(OntologySchema/NodeLabel/…)·`seed_ontology.SEED_ONTOLOGY`를 모두 삭제.
     **`seed_ontology.py`의 `DOMAIN_GUIDE`(+임계값·수질항목 상수)는 extractor가 재사용하므로 유지.**
-  - 프론트(`app/frontend/src/`): `App.tsx`, `api.ts`, `types.ts`,
+  - 프론트(`app/frontend/src/`): `App.tsx`(브랜드 부제목 제거됨), `api.ts`, `types.ts`,
     `components/{ProjectList,Workspace,ExtractionPreview,KnowledgeInventory,QueryPanel,GraphView}.tsx`.
-    Workspace는 **세로 스택**(지식 입력 → 지식 현황 → **지식 탐색** → 지식 그래프). `QueryPanel`은
+    Workspace는 상단 **탭 2개**: **[지식설계]**=세로 스택(지식 입력 → 지식 현황 → 지식 그래프),
+    **[지식활용]**=지식 탐색(`QueryPanel`). 탭 전환은 `display` 토글이라 각 탭 상태 보존. `QueryPanel`은
     자연어 질의→생성 Cypher 표시→결과 그래프(`GraphView` 재사용)+표(`KnowledgeInventory` `readOnly`
     재사용). `KnowledgeInventory`는 노드·관계 데이터 표 + 개별 삭제(`DELETE /entities`·`/relations`)
     + **10개 초과 시 클라이언트 페이지네이션** + `readOnly` prop(탐색 결과 표 재사용).

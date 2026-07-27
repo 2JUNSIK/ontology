@@ -648,6 +648,34 @@ input[type="checkbox"] {
   padding: 0 24px;
 }
 
+/* ===================== 지식 탐색(예시 질문 프리셋) ===================== */
+.query-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.query-presets-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+button.query-preset {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+}
+button.query-preset:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 /* ===================== 지식 탐색(생성된 Cypher) ===================== */
 .query-cypher {
   background: var(--surface-2);

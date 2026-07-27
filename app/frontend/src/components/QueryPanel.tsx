@@ -8,6 +8,16 @@ interface Props {
   projectId: string;
 }
 
+// 예시 질문 프리셋 — 클릭하면 질문칸을 "채우기만" 한다(자동 실행 아님: /query는 Claude 과금 호출).
+// 그래프형·표(집계)형·정량값(N10) 등 다양한 조회 종류를 고루 보여줘 첫 사용자의 진입장벽을 낮춘다.
+const PRESETS = [
+  "녹조와 직접 연결된 개념을 모두 보여줘",
+  "조류경보제와 연결된 노드와 관계를 보여줘",
+  "경보단계 타입인 노드를 모두 알려줘",
+  "정량값(기준 수치)이 있는 노드를 보여줘",
+  "타입별 노드 개수를 세어줘",
+];
+
 function fmtCell(v: unknown): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "object") return JSON.stringify(v);
@@ -58,6 +68,28 @@ export default function QueryPanel({ projectId }: Props) {
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
       />
+
+      <div className="query-presets" role="group" aria-labelledby="query-presets-label">
+        <span className="query-presets-label" id="query-presets-label">예시 질문</span>
+        {PRESETS.map((p) => (
+          <button
+            key={p}
+            type="button"
+            className="query-preset"
+            // 질문칸만 채우고 이전 결과/에러는 비운다(질문과 화면의 결과 불일치 방지). 자동 실행은 하지 않음.
+            onClick={() => {
+              setQuestion(p);
+              setResult(null);
+              setError(null);
+            }}
+            disabled={loading}
+            title="클릭하면 질문칸에 채워집니다 (자동 실행 아님)"
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
       <div className="row between" style={{ marginTop: 12 }}>
         <span className="muted" />
         <button className="primary" onClick={handleQuery} disabled={loading || !question.trim()}>

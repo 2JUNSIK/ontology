@@ -35,21 +35,22 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 
 ## 진행 현황 (2026-07-27 기준)
 
-**완료: N1~N11** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
+**완료: N1~N12** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
 **자연어 그래프 탐색(text-to-cypher, 읽기 경로)** + **표준 어휘 정규화(N9)** + **정량 속성 구조화(N10)** +
-**그래프 시각화 강화(N11)**). end-to-end 동작 확인. 앱이 이제 입력(쓰기)뿐 아니라 **자연어 질의로 탐색(읽기)**
-까지 하는 양방향이 됐고, "실무형 지식그래프 강화"로 **① 표준 타입/관계 어휘 + 별칭→표준명 정규화(중복 방지)**
-**② 정량 속성(value/unit/comparator/observed_at을 노드 속성으로 — 임계값·대표 수치)** 을 갖췄다. UI는 상단
-**지식설계/지식활용 2개 탭**으로 입력·관리와 탐색을 분리했고(상단 브랜드 부제목 제거), **N11**에서 그래프
-시각화를 강화했다(degree 비례 노드 크기·노드 검색/하이라이트·전체보기/재정렬·정량값 amber 링).
-**다음: 프론트 디자인/기능 확장 계속.**
+**그래프 시각화 강화(N11)** + **탐색 예시 질문 프리셋(N12)**). end-to-end 동작 확인. 앱이 이제 입력(쓰기)뿐
+아니라 **자연어 질의로 탐색(읽기)** 까지 하는 양방향이 됐고, "실무형 지식그래프 강화"로 **① 표준 타입/관계 어휘
++ 별칭→표준명 정규화(중복 방지)** **② 정량 속성(value/unit/comparator/observed_at을 노드 속성으로 — 임계값·대표
+수치)** 을 갖췄다. UI는 상단 **지식설계/지식활용 2개 탭**으로 입력·관리와 탐색을 분리했고(상단 브랜드 부제목 제거),
+**N11**에서 그래프 시각화를 강화(degree 비례 노드 크기·노드 검색/하이라이트·전체보기/재정렬·정량값 amber 링),
+**N12**에서 지식활용 탐색에 **예시 질문 프리셋**(클릭 시 질문칸만 채움·자동 실행 안 함)을 더해 첫 사용자
+진입장벽을 낮췄다. **다음: 프론트 디자인/기능 확장 계속.**
 
-> **git 상태(2026-07-27, 실측 정정)**: **N1~N10은 main에 머지 완료**(`main`=`origin/main`=`e643362`).
-> 문서에 'N9·N10은 `feat-ontology-enrichment`에 커밋·PR 예정'으로 적혀 있었으나 `git rev-parse`로 확인 결과
-> **이미 main에 머지·push됨**(feat-ontology-enrichment==main==e643362). **N11은 `feat-graph-visualization`**
-> (그래프 시각화 강화)에 커밋됨 — origin에 push 완료, **PR 대기**(웹 링크로 오픈).
-> 머지 끝난 구 브랜치(`feat-graph-query`/`n6-cleanup`/`feat-knowledge-inventory`/`feat-ontology-enrichment`)는
-> 정리 가능. `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-07-27, 실측 정정)**: **N1~N11은 main에 머지·push 완료**(`main`=`origin/main`=`aa962de`;
+> N11 `feat-graph-visualization`을 ff 머지). 이전 문서에 'N9·N10은 `feat-ontology-enrichment`에 PR 예정'으로
+> 적혀 있었으나 `git rev-parse` 확인 결과 이미 머지됐었음. **N12는 `feat-query-presets`**(탐색 예시 질문 프리셋)에
+> 커밋 + origin push — **PR 대기**(웹 링크로 오픈). 머지 끝난 구 브랜치(`feat-graph-query`/`n6-cleanup`/
+> `feat-knowledge-inventory`/`feat-ontology-enrichment`/`feat-graph-visualization`)는 정리 가능.
+> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
@@ -236,6 +237,11 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
   정량 속성(N10) 노드에 amber 링 + 범례 정량값 칩(패널 안 열어도 인지). 적대적 검수 반영: S2(새 노드 등장 시에만
   auto-fit → 순수 삭제는 사용자 줌/뷰 보존), S1(refit 리셋=data 기준), S3(엔진 정지 전 전체보기 비활성),
   N1(paint 콜백 인라인 유지 주석=정적 그래프 재드로우 보호), N2/N4/N6. **API 과금 없음.** `tsc --noEmit` 통과.
+- **[x] N12** 탐색 UX 예시 질문 프리셋(순수 프론트, `QueryPanel.tsx`) — 그래프형·표(집계)형·정량값(N10)을
+  고루 커버하는 예시 질문 칩 5개. 클릭 시 질문칸만 **채우고 자동 실행 안 함**(`/query`는 Claude 과금이라 실행은
+  명시적 사용자 액션으로 유지) + **이전 결과/에러 초기화**(질문·화면 결과 불일치 방지) + 로딩 중 비활성 +
+  접근성 `role=group`/`aria-labelledby`. 적대적 검수 must-fix 없음(자동 제출 경로 없음 확인, SHOULD·NICE 반영).
+  **API 과금 없음.** `tsc --noEmit` 통과.
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

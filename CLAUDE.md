@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N11 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N12 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
 백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **N6**에서 구 v1(설문/스키마) 코드를 완전 제거해
@@ -17,18 +17,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 순수 후처리 `ontology_normalizer.py`)를, **N10**에서 **정량 속성 구조화**(임계값·대표 수치를
 `value/unit/comparator/observed_at` 노드 속성으로 — 자유 텍스트에 묻지 않고 비교·집계 가능하게)를
 추가했다("실무형 지식그래프 강화" 방향). **N11**에서 **그래프 시각화를 강화**(degree 비례 노드 크기·
-노드 검색/하이라이트·전체보기(zoomToFit)/재정렬·정량값 amber 링, 순수 프론트 `GraphView.tsx`)했다.
-다음: 프론트 디자인/기능 확장 계속.
+노드 검색/하이라이트·전체보기(zoomToFit)/재정렬·정량값 amber 링, 순수 프론트 `GraphView.tsx`)하고,
+**N12**에서 지식활용 탐색에 **예시 질문 프리셋**(클릭 시 질문칸만 채움·자동 실행 안 함, `QueryPanel.tsx`)을
+추가했다. 다음: 프론트 디자인/기능 확장 계속.
 
-> **git 상태(2026-07-27, 실측 정정)**: **N1~N10은 main에 머지·push 완료**(`main`=`origin/main`=`e643362`).
-> 문서에 'N9·N10은 `feat-ontology-enrichment`에 커밋·PR 예정'으로 적혀 있었으나 `git rev-parse` 확인 결과
-> **이미 main에 머지됨**(feat-ontology-enrichment==main==e643362). **N11은 `feat-graph-visualization`**
-> (그래프 시각화 강화)에 커밋 + origin push 완료 — **PR 대기**(웹 링크로 오픈).
-> 머지 끝난 구 브랜치(`feat-graph-query`/`n6-cleanup`/`feat-knowledge-inventory`/`feat-ontology-enrichment`)는
-> 정리 가능. `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-07-27, 실측 정정)**: **N1~N11은 main에 머지·push 완료**(`main`=`origin/main`=`aa962de`;
+> N11 `feat-graph-visualization`을 ff 머지). 이전 문서의 'N9·N10은 `feat-ontology-enrichment`에 PR 예정'은
+> `git rev-parse` 확인 결과 이미 머지됐던 것. **N12는 `feat-query-presets`**(탐색 예시 질문 프리셋)에
+> 커밋 + origin push — **PR 대기**(웹 링크로 오픈). 머지 끝난 구 브랜치(`feat-graph-query`/`n6-cleanup`/
+> `feat-knowledge-inventory`/`feat-ontology-enrichment`/`feat-graph-visualization`)는 정리 가능.
+> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
-  API(§5), 마일스톤(N1~N11, §10), "진행 현황"이 모두 여기 있다.
+  API(§5), 마일스톤(N1~N12, §10), "진행 현황"이 모두 여기 있다.
 - **현재 코드**(`app/backend/app/`):
   - [v2 핵심] `models.py`(Entity/Relation/Extraction + 식별자 방어선 + **정량 속성**
     `value/unit/comparator/observed_at`, comparator 화이트리스트·value NaN/Inf/bool 거부·고아 정량 정규화),
@@ -51,7 +52,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     Workspace는 상단 **탭 2개**: **[지식설계]**=세로 스택(지식 입력 → 지식 현황 → 지식 그래프),
     **[지식활용]**=지식 탐색(`QueryPanel`). 탭 전환은 `display` 토글이라 각 탭 상태 보존. `QueryPanel`은
     자연어 질의→생성 Cypher 표시→결과 그래프(`GraphView` 재사용)+표(`KnowledgeInventory` `readOnly`
-    재사용). `KnowledgeInventory`는 노드·관계 데이터 표 + 개별 삭제(`DELETE /entities`·`/relations`)
+    재사용). **N12**: `QueryPanel`에 **예시 질문 프리셋 칩**(클릭 시 질문칸만 채우고 자동 실행 안 함=과금 방지,
+    클릭 시 이전 결과/에러 초기화). `KnowledgeInventory`는 노드·관계 데이터 표 + 개별 삭제(`DELETE /entities`·`/relations`)
     + **10개 초과 시 클라이언트 페이지네이션** + `readOnly` prop(탐색 결과 표 재사용).
     `GraphView`(N11 강화)는 controlled·타입별 색상 + **degree 비례 노드 크기** + **오버레이 툴바**
     (노드 이름 검색→부분일치 하이라이트+나머지 디밍 / 전체 보기 `zoomToFit` / 재정렬 `d3ReheatSimulation`)

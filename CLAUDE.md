@@ -21,12 +21,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **N12**에서 지식활용 탐색에 **예시 질문 프리셋**(클릭 시 질문칸만 채움·자동 실행 안 함, `QueryPanel.tsx`)을
 추가했다. 다음: 프론트 디자인/기능 확장 계속.
 
-> **git 상태(2026-07-27, 실측 정정)**: **N1~N11은 main에 머지·push 완료**(`main`=`origin/main`=`aa962de`;
-> N11 `feat-graph-visualization`을 ff 머지). 이전 문서의 'N9·N10은 `feat-ontology-enrichment`에 PR 예정'은
-> `git rev-parse` 확인 결과 이미 머지됐던 것. **N12는 `feat-query-presets`**(탐색 예시 질문 프리셋)에
-> 커밋 + origin push — **PR 대기**(웹 링크로 오픈). 머지 끝난 구 브랜치(`feat-graph-query`/`n6-cleanup`/
-> `feat-knowledge-inventory`/`feat-ontology-enrichment`/`feat-graph-visualization`)는 정리 가능.
-> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-07-27)**: **N1~N12 전부 main에 머지·push 완료**(`main`=`origin/main`=`4d41960`).
+> N11 `feat-graph-visualization`·N12 `feat-query-presets`를 ff 머지한 뒤, 머지 끝난 피처 브랜치 6개
+> (`feat-graph-query`/`feat-knowledge-inventory`/`feat-ontology-enrichment`/`n6-cleanup`/
+> `feat-graph-visualization`/`feat-query-presets`)를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
+> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서, PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
   API(§5), 마일스톤(N1~N12, §10), "진행 현황"이 모두 여기 있다.

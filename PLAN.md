@@ -35,15 +35,19 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 
 ## 진행 현황 (2026-07-27 기준)
 
-**완료: N1~N8** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
-**자연어 그래프 탐색(text-to-cypher, 읽기 경로)**). end-to-end 동작 확인. 앱이 이제 입력(쓰기)뿐
-아니라 **자연어 질의로 탐색(읽기)** 까지 하는 양방향이 됐다. UI는 상단 **지식설계/지식활용 2개
-탭**으로 입력·관리와 탐색을 분리했다(상단 브랜드 부제목은 제거). **다음: 프론트 디자인/기능 확장 계속.**
+**완료: N1~N10** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
+**자연어 그래프 탐색(text-to-cypher, 읽기 경로)** + **표준 어휘 정규화(N9)** + **정량 속성 구조화(N10)**).
+end-to-end 동작 확인. 앱이 이제 입력(쓰기)뿐 아니라 **자연어 질의로 탐색(읽기)** 까지 하는 양방향이 됐고,
+"실무형 지식그래프 강화"로 **① 표준 타입/관계 어휘 + 별칭→표준명 정규화(중복 방지)** **② 정량 속성
+(value/unit/comparator/observed_at을 노드 속성으로 — 임계값·대표 수치)** 을 갖췄다. UI는 상단
+**지식설계/지식활용 2개 탭**으로 입력·관리와 탐색을 분리했다(상단 브랜드 부제목은 제거).
+**다음: 프론트 디자인/기능 확장 계속.**
 
-> **git 상태(2026-07-27)**: **N6·N7은 main에 머지 완료**(`main`=origin/main=`fa0b045`, fast-forward).
-> **N8은 `feat-graph-query`**(자연어 탐색 + 지식설계/지식활용 탭 + 부제목 제거)에 있고 origin에
-> push됨 — main보다 2커밋 앞, **아직 main 미머지**. 머지 끝난 `n6-cleanup`/`feat-knowledge-inventory`는
-> 정리(삭제) 가능. `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-07-27)**: **N1~N8은 main에 머지 완료**(`main`=`origin/main`=`df5c0df` — 이전 문서에
+> 'N8 미머지'로 적혀 있었으나 실제로는 이미 ff 머지됐음을 `git rev-parse`로 검증). **N9·N10은
+> `feat-ontology-enrichment`**(표준 어휘 정규화 + 정량 속성)에 커밋됨 — main보다 2커밋 앞, push 후 PR 예정.
+> 머지 끝난 구 브랜치(`feat-graph-query`/`n6-cleanup`/`feat-knowledge-inventory`)는 정리 가능.
+> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
@@ -104,6 +108,11 @@ class Entity(BaseModel):
     name: str            # 값(파라미터 바인딩) — 길이 제한, 제어문자 거부
     type: str = ""       # 타입 라벨(식별자) — 비면 미분류. 비지 않으면 _clean_label_or_type 검증
     description: str = ""
+    # 정량 속성(N10, 전부 optional·값·하위호환). 임계값·대표 수치를 노드 속성으로.
+    value: float | None = None   # NaN/Inf/bool 거부. value 없으면 comparator/unit은 정규화로 드롭
+    unit: str = ""               # 단위(값) 예: cells/mL
+    comparator: str = ""         # 화이트리스트: "", ">=", "<=", ">", "<", "="
+    observed_at: str = ""        # 시각(값, ISO8601 문자열)
 
 class Relation(BaseModel):
     source: str; target: str   # 값(엔티티 이름)
@@ -208,6 +217,18 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
   프론트 `QueryPanel`(생성 Cypher 표시 + 결과 그래프 + 표) + `KnowledgeInventory` readOnly 재사용.
   **안전 3중 방어**(정적 검증 → READ access mode 쓰기 거부 → 결과 사후 격리 필터). 단위/통합/검증
   테스트 추가, 적대적 검수 후 must-fix 2건(rows 격리 유출·`$pid` substring 우회) 반영.
+- **[x] N9** 표준 어휘 정규화(스키마 + 엔티티 별칭) — `seed_ontology`에 `STANDARD_ENTITY_TYPES`/
+  `STANDARD_RELATION_TYPES`/`TYPE_ALIASES`/`CANONICAL_ALIASES`/`RELATION_CONSTRAINTS` 상수 + `DOMAIN_GUIDE`
+  주입, 신규 순수 함수 `ontology_normalizer.py`(`canonicalize_extraction`: 별칭·타입 표준화 + 관계 끝점
+  치환 + 이름/관계 dedup 병합 + 방어선 재통과 / `validate_domain_range`: 위반을 **경고로만**, 삭제 안 함),
+  `claude_extractor._to_internal` 후처리, `POST /extract`를 `ExtractResponse{extraction,warnings}`로 래핑,
+  프론트 미리보기 경고 배너 + 표준 타입 datalist. 검수 반영(경고 라벨 canonical화, 타입충돌 병합 정책 명시).
+- **[x] N10** 정량 속성·단위 구조화(실무형, 노드 속성 방식) — `models.Entity`에 optional
+  `value/unit/comparator/observed_at`(comparator 화이트리스트, value NaN/Inf/bool 거부, 고아 정량 정규화),
+  `cypher_builder`가 정량 속성을 **파라미터로만** SET(value는 `IS NOT NULL` 시 갱신·아니면 유지, sticky),
+  `neo4j_service.fetch_project_graph`/`_node_payload` RETURN 확장, `DOMAIN_GUIDE` 모델링 원칙을 '정량 속성
+  기록'으로 갱신, 프론트 미리보기 정량 입력·지식현황 값 컬럼·그래프 패널 표시(`formatQuantity`).
+  검수 반영(고아 정량 정규화 MED-1, sticky 정책 명문화 MED-2). *측정 이벤트 노드/시계열은 범위 밖(후속).*
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

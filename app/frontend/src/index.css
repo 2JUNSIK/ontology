@@ -483,6 +483,30 @@ input[type="checkbox"] {
   background: var(--bg-subtle);
   color: var(--text-2);
 }
+.kg-inv-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.kg-range {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.kg-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+.kg-pager-info {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  min-width: 56px;
+  text-align: center;
+}
 
 /* ===================== 그래프 ===================== */
 .graph-wrap {

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Project } from "../types";
+import Skeleton from "./ui/Skeleton";
 
 interface Props {
   projects: Project[];
@@ -8,7 +9,7 @@ interface Props {
   deletingId: string | null;
   onSelect: (p: Project) => void;
   onCreate: (name: string, description: string) => void;
-  onDelete: (p: Project) => void;
+  onDelete: (p: Project) => void; // 확인 모달은 App(useConfirm)에서 처리
 }
 
 export default function ProjectList({
@@ -22,12 +23,19 @@ export default function ProjectList({
 }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
 
   function submit() {
     if (!name.trim()) return;
     onCreate(name.trim(), description.trim());
     setName("");
     setDescription("");
+  }
+
+  // 빈 상태 CTA: 생성 폼의 이름 입력으로 스크롤·포커스.
+  function focusNewProject() {
+    nameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    nameRef.current?.focus();
   }
 
   return (
@@ -48,8 +56,9 @@ export default function ProjectList({
       <div className="panel">
         <h2 className="section-title">새 프로젝트</h2>
         <p className="section-desc">주제별로 독립된 지식그래프를 만들어 관리하세요.</p>
-        <div className="row" style={{ gap: 12, flexWrap: "wrap", marginTop: 18 }}>
+        <div className="row stack-mobile" style={{ gap: 12, flexWrap: "wrap", marginTop: 18 }}>
           <input
+            ref={nameRef}
             style={{ minWidth: 220 }}
             placeholder="프로젝트 이름 (예: 녹조 대응)"
             value={name}
@@ -64,7 +73,7 @@ export default function ProjectList({
             onKeyDown={(e) => e.key === "Enter" && submit()}
           />
           <button className="primary" onClick={submit} disabled={creating || !name.trim()}>
-            {creating ? "생성 중…" : "＋ 프로젝트 만들기"}
+            {creating ? <><span className="spinner" aria-hidden />생성 중…</> : "＋ 프로젝트 만들기"}
           </button>
         </div>
       </div>
@@ -72,47 +81,55 @@ export default function ProjectList({
       <div className="panel" style={{ marginTop: 20 }}>
         <h2 className="section-title">내 프로젝트</h2>
         <p className="section-desc">
-          {loading
-            ? "불러오는 중…"
-            : `${projects.length}개의 프로젝트`}
+          {loading ? "불러오는 중…" : `${projects.length}개의 프로젝트`}
         </p>
         <div style={{ marginTop: 18 }}>
+          {loading &&
+            [0, 1, 2].map((i) => (
+              <div className="skeleton-card" key={i}>
+                <Skeleton width="42%" height={18} />
+                <Skeleton width="66%" height={13} />
+              </div>
+            ))}
+
           {!loading && projects.length === 0 && (
-            <div className="muted">아직 프로젝트가 없습니다. 위에서 하나 만들어 보세요.</div>
+            <div className="empty-state">
+              <div className="empty-icon" aria-hidden>🗂️</div>
+              <div className="empty-title">아직 프로젝트가 없습니다</div>
+              <div className="muted">첫 프로젝트를 만들어 지식그래프를 시작해 보세요.</div>
+              <button className="primary" style={{ marginTop: 4 }} onClick={focusNewProject}>
+                ＋ 첫 프로젝트 만들기
+              </button>
+            </div>
           )}
-          {projects.map((p) => (
-            <div className="card project-card" key={p.id}>
-              <div className="row between">
-                <div>
-                  <h4>{p.name}</h4>
-                  {p.description && <div className="muted">{p.description}</div>}
-                </div>
-                <div className="row" style={{ gap: 8 }}>
-                  <button
-                    className="mini primary"
-                    onClick={() => onSelect(p)}
-                    disabled={deletingId === p.id}
-                  >
-                    열기 →
-                  </button>
-                  <button
-                    className="mini danger"
-                    disabled={deletingId !== null}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `프로젝트 '${p.name}'와 그 지식그래프를 삭제할까요? 되돌릴 수 없습니다.`,
-                        )
-                      )
-                        onDelete(p);
-                    }}
-                  >
-                    {deletingId === p.id ? "삭제 중…" : "삭제"}
-                  </button>
+
+          {!loading &&
+            projects.map((p) => (
+              <div className="card project-card" key={p.id}>
+                <div className="row between">
+                  <div>
+                    <h4>{p.name}</h4>
+                    {p.description && <div className="muted">{p.description}</div>}
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button
+                      className="mini primary"
+                      onClick={() => onSelect(p)}
+                      disabled={deletingId === p.id}
+                    >
+                      열기 →
+                    </button>
+                    <button
+                      className="mini danger"
+                      disabled={deletingId !== null}
+                      onClick={() => onDelete(p)}
+                    >
+                      {deletingId === p.id ? "삭제 중…" : "삭제"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
     </div>

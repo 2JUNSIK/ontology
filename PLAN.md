@@ -33,9 +33,9 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 - **재사용**: `neo4j_service`(드라이버/실행), `cypher_builder.escape_identifier`(인젝션 방어),
   Claude 구조화 출력 패턴, `GraphView`, `models`의 식별자 방어선(`_clean_identifier` 등).
 
-## 진행 현황 (2026-07-27 기준)
+## 진행 현황 (2026-08-04 기준)
 
-**완료: N1~N12** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
+**완료: N1~N13** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
 **자연어 그래프 탐색(text-to-cypher, 읽기 경로)** + **표준 어휘 정규화(N9)** + **정량 속성 구조화(N10)** +
 **그래프 시각화 강화(N11)** + **탐색 예시 질문 프리셋(N12)**). end-to-end 동작 확인. 앱이 이제 입력(쓰기)뿐
 아니라 **자연어 질의로 탐색(읽기)** 까지 하는 양방향이 됐고, "실무형 지식그래프 강화"로 **① 표준 타입/관계 어휘
@@ -43,13 +43,14 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 수치)** 을 갖췄다. UI는 상단 **지식설계/지식활용 2개 탭**으로 입력·관리와 탐색을 분리했고(상단 브랜드 부제목 제거),
 **N11**에서 그래프 시각화를 강화(degree 비례 노드 크기·노드 검색/하이라이트·전체보기/재정렬·정량값 amber 링),
 **N12**에서 지식활용 탐색에 **예시 질문 프리셋**(클릭 시 질문칸만 채움·자동 실행 안 함)을 더해 첫 사용자
-진입장벽을 낮췄다. **다음: 프론트 디자인/기능 확장 계속.**
+진입장벽을 낮췄다. **N13**에서 **디자인/UX 리프레시**(다크모드 토글·커스텀 확인 모달·토스트 알림·스켈레톤
+로딩·빈 상태 CTA·비용 배지·반응형·접근성[focus-visible·aria·inert·prefers-reduced-motion])를 추가해
+현재 Toss 톤을 유지·정제하면서 데모/현업 환경 다양성에 대응했다(순수 프론트, API 과금 없음).
+**다음: 프론트 디자인/기능 확장 계속.**
 
-> **git 상태(2026-07-27)**: **N1~N12 전부 main에 머지·push 완료**(`main`=`origin/main`=`4d41960`).
-> N11 `feat-graph-visualization`·N12 `feat-query-presets`를 ff 머지한 뒤, 머지 끝난 피처 브랜치 6개
-> (`feat-graph-query`/`feat-knowledge-inventory`/`feat-ontology-enrichment`/`n6-cleanup`/
-> `feat-graph-visualization`/`feat-query-presets`)를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
-> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서 하고 PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-04)**: **N1~N12는 main에 머지·push 완료**(`main`=`origin/main`=`4d41960`).
+> **N13(디자인/UX 리프레시)은 새 피처 브랜치 `feat-design-refresh`에서 작업 → 커밋 후 PR**(아직 main 미머지).
+> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
@@ -241,6 +242,16 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
   명시적 사용자 액션으로 유지) + **이전 결과/에러 초기화**(질문·화면 결과 불일치 방지) + 로딩 중 비활성 +
   접근성 `role=group`/`aria-labelledby`. 적대적 검수 must-fix 없음(자동 제출 경로 없음 확인, SHOULD·NICE 반영).
   **API 과금 없음.** `tsc --noEmit` 통과.
+- **[x] N13** 디자인/UX 리프레시(순수 프론트, 다크모드까지 풀 리프레시·현재 Toss 톤 유지·정제) —
+  **테마화**: `index.css`에 `:root[data-theme="dark"]` 토큰 오버라이드 + 글래스/notice-ink·line 토큰
+  (컴포넌트 무수정 전환), **신규 프리미티브** `theme.tsx`(ThemeProvider/useTheme·localStorage·prefers-color-scheme),
+  `components/ThemeToggle.tsx`, `components/ui/{ConfirmDialog(useConfirm, promise 기반·focus trap·Esc·배경 inert),
+  Toast(useToast·자동소멸·error=assertive), Skeleton}`. **UX**: `window.confirm`(4곳)→커스텀 모달, 생성/반영/삭제
+  성공→토스트, 로딩→스켈레톤, 빈 상태 CTA, 추출·탐색 버튼 비용 배지. **GraphView 다크 캔버스**(하드코딩색→`useTheme`
+  팔레트, 다크 전용 노드 팔레트, paint 콜백 인라인 유지=N11 규약, Esc로 패널 닫기). **반응형**(≤720px)·**접근성**
+  (focus-visible outline=clip-proof, aria-modal/describedby, prefers-reduced-motion). 적대적 검수 2회(정확성·a11y)
+  후 must-fix 반영: useConfirm 이중오픈/언마운트 promise 유실, 토스트 pointer-events, primary 버튼/다크 muted 대비,
+  disabled 가독성, 캔버스 저대비 노드색. **API 과금 없음.** `tsc --noEmit` 0에러.
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

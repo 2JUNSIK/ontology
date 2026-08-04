@@ -233,7 +233,7 @@ export default function ExtractionPreview({
               <span className="mono">({r.target})</span>
             </label>
             {blocked && (
-              <div className="muted" style={{ color: "var(--warning)", marginTop: 4 }}>
+              <div className="muted" style={{ color: "var(--warning-ink)", marginTop: 4 }}>
                 제외된 노드를 참조 — 이 관계는 추가되지 않습니다.
               </div>
             )}

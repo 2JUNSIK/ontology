@@ -12,6 +12,9 @@ import ExtractionPreview from "./ExtractionPreview";
 import GraphView from "./GraphView";
 import KnowledgeInventory, { entKey, relKey } from "./KnowledgeInventory";
 import QueryPanel from "./QueryPanel";
+import Skeleton from "./ui/Skeleton";
+import { useConfirm } from "./ui/ConfirmDialog";
+import { useToast } from "./ui/Toast";
 
 interface Props {
   project: Project;
@@ -27,14 +30,15 @@ export default function Workspace({ project, onBack }: Props) {
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [emptyExtract, setEmptyExtract] = useState(false);
-  const [ingestMsg, setIngestMsg] = useState<string | null>(null);
 
   const [loadingGraph, setLoadingGraph] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [ingesting, setIngesting] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
-  const [deleteMsg, setDeleteMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function loadGraph() {
     setLoadingGraph(true);
@@ -53,9 +57,15 @@ export default function Workspace({ project, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
-  function handleBack() {
-    if (extraction && !window.confirm("추출 미리보기가 아직 있습니다. 나가면 사라집니다. 계속할까요?"))
-      return;
+  async function handleBack() {
+    if (extraction) {
+      const ok = await confirm({
+        title: "미리보기를 두고 나갈까요?",
+        body: "추출 미리보기가 아직 있습니다. 나가면 사라집니다.",
+        confirmText: "나가기",
+      });
+      if (!ok) return;
+    }
     onBack();
   }
 
@@ -66,7 +76,6 @@ export default function Workspace({ project, onBack }: Props) {
     setExtraction(null);
     setWarnings([]);
     setEmptyExtract(false);
-    setIngestMsg(null);
     try {
       const res = await extractKnowledge(project.id, text);
       const ex = res.extraction;
@@ -77,7 +86,9 @@ export default function Workspace({ project, onBack }: Props) {
         setWarnings(res.warnings);
       }
     } catch (e) {
-      setError(errMessage(e));
+      const msg = errMessage(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setExtracting(false);
     }
@@ -94,12 +105,13 @@ export default function Workspace({ project, onBack }: Props) {
       setEmptyExtract(false);
       setText("");
       const c = (res.stats?.counters ?? {}) as Record<string, number>;
-      setIngestMsg(
-        `반영 완료 — 새 노드 ${c.nodes_created ?? 0}개, 새 관계 ${c.relationships_created ?? 0}개` +
-          " (기존 항목은 병합됨)",
+      toast.success(
+        `반영 완료 — 새 노드 ${c.nodes_created ?? 0}개, 새 관계 ${c.relationships_created ?? 0}개 (기존 항목은 병합됨)`,
       );
     } catch (e) {
-      setError(errMessage(e));
+      const msg = errMessage(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIngesting(false);
     }
@@ -107,27 +119,25 @@ export default function Workspace({ project, onBack }: Props) {
 
   async function handleDeleteEntity(name: string) {
     if (deletingKey) return; // 진행 중 이중 클릭 방지
-    if (
-      !window.confirm(
-        `'${name}' 노드를 삭제할까요?\n이 노드에 연결된 관계도 함께 사라집니다.`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: "노드 삭제",
+      body: `‘${name}’ 노드를 삭제할까요?\n이 노드에 연결된 관계도 함께 사라집니다.`,
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     setDeletingKey(entKey(name));
     setError(null);
-    setIngestMsg(null);
-    setDeleteMsg(null);
     try {
       const res = await deleteEntity(project.id, name);
       setGraph(res.graph);
       const n = (res.stats?.nodes_deleted ?? 0) as number;
-      setDeleteMsg(
-        n > 0
-          ? { ok: true, text: `'${name}' 노드를 삭제했습니다.` }
-          : { ok: false, text: `'${name}'과(와) 일치하는 노드가 없어 삭제되지 않았습니다.` },
-      );
+      if (n > 0) toast.success(`‘${name}’ 노드를 삭제했습니다.`);
+      else toast.info(`‘${name}’과(와) 일치하는 노드가 없어 삭제되지 않았습니다.`);
     } catch (e) {
-      setError(errMessage(e));
+      const msg = errMessage(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setDeletingKey(null);
     }
@@ -135,22 +145,25 @@ export default function Workspace({ project, onBack }: Props) {
 
   async function handleDeleteRelation(source: string, target: string, type: string) {
     if (deletingKey) return;
-    if (!window.confirm(`관계 (${source})-[${type}]→(${target}) 를 삭제할까요?`)) return;
+    const ok = await confirm({
+      title: "관계 삭제",
+      body: `관계 (${source})-[${type}]→(${target}) 를 삭제할까요?`,
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     setDeletingKey(relKey(source, type, target));
     setError(null);
-    setIngestMsg(null);
-    setDeleteMsg(null);
     try {
       const res = await deleteRelation(project.id, source, target, type);
       setGraph(res.graph);
       const n = (res.stats?.relationships_deleted ?? 0) as number;
-      setDeleteMsg(
-        n > 0
-          ? { ok: true, text: `관계 (${source})-[${type}]→(${target}) 를 삭제했습니다.` }
-          : { ok: false, text: `일치하는 관계가 없어 삭제되지 않았습니다.` },
-      );
+      if (n > 0) toast.success(`관계 (${source})-[${type}]→(${target}) 를 삭제했습니다.`);
+      else toast.info("일치하는 관계가 없어 삭제되지 않았습니다.");
     } catch (e) {
-      setError(errMessage(e));
+      const msg = errMessage(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setDeletingKey(null);
     }
@@ -209,18 +222,18 @@ export default function Workspace({ project, onBack }: Props) {
               onChange={(e) => setText(e.target.value)}
             />
             <div className="row between" style={{ marginTop: 12 }}>
-              <span className="muted" />
+              <span className="cost-badge" title="이 작업은 Claude API를 호출합니다(키가 있으면 과금).">
+                💳 Claude 호출 · 과금 가능
+              </span>
               <button className="primary" onClick={handleExtract} disabled={extracting || !text.trim()}>
-                {extracting ? "추출 중… (Claude 호출)" : "추출 →"}
+                {extracting ? (
+                  <><span className="spinner" aria-hidden />추출 중…</>
+                ) : (
+                  "추출 →"
+                )}
               </button>
             </div>
           </div>
-
-          {ingestMsg && (
-            <div className="notice success" style={{ marginTop: 16 }}>
-              ✓ {ingestMsg}
-            </div>
-          )}
 
           {emptyExtract && (
             <div className="notice" style={{ marginTop: 16 }}>
@@ -254,14 +267,13 @@ export default function Workspace({ project, onBack }: Props) {
               새로고침
             </button>
           </div>
-          {deleteMsg && (
-            <div className={"notice" + (deleteMsg.ok ? " success" : "")} style={{ marginBottom: 14 }}>
-              {deleteMsg.ok ? "✓ " : "⚠ "}
-              {deleteMsg.text}
-            </div>
-          )}
           {loadingGraph ? (
-            <div className="kg-empty">불러오는 중…</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <Skeleton width="28%" height={14} />
+              <Skeleton height={40} radius={12} />
+              <Skeleton height={40} radius={12} />
+              <Skeleton height={40} radius={12} />
+            </div>
           ) : (
             <KnowledgeInventory
               data={graph}
@@ -282,7 +294,7 @@ export default function Workspace({ project, onBack }: Props) {
           </div>
           {loadingGraph ? (
             <div className="graph-wrap">
-              <div className="center-msg">불러오는 중…</div>
+              <Skeleton width="100%" height="100%" radius={0} />
             </div>
           ) : (
             <GraphView data={graph} />

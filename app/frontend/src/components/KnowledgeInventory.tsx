@@ -99,7 +99,11 @@ export default function KnowledgeInventory({
           )}
         </div>
         {data.nodes.length === 0 ? (
-          <div className="kg-empty">아직 노드가 없습니다. 위 “지식 입력”에서 문장을 추가해 보세요.</div>
+          <div className="kg-empty">
+            {readOnly
+              ? "표시할 노드가 없습니다."
+              : "아직 노드가 없습니다. 위 “지식 입력”에서 문장을 추가해 보세요."}
+          </div>
         ) : (
           <>
             <div className="kg-table-wrap">

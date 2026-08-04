@@ -20,10 +20,11 @@
   --text-3: #8b95a1; /* tertiary / muted */
 
   /* 브랜드 (toss blue) */
-  --primary: #3182f6;
+  --primary: #3182f6; /* 강조 텍스트/링크/액티브 탭 등 accent용(soft 배경 위) */
   --primary-hover: #2272eb;
   --primary-pressed: #1b64da;
   --primary-soft: #e8f3ff;
+  --primary-btn: #2272eb; /* .primary 버튼 '배경' 전용 — 흰 글자와 4.5:1 확보(accent보다 진함) */
 
   /* 상태색 */
   --danger: #f04452;
@@ -50,9 +51,75 @@
   --r-lg: 20px;
   --r-pill: 999px;
 
+  /* 글래스(반투명 오버레이) — 상단바/그래프 툴바·패널·범례. 다크에서 어두운 반투명으로 flip */
+  --glass: rgba(255, 255, 255, 0.82);
+  --glass-2: rgba(255, 255, 255, 0.95);
+
+  /* 알림(notice/error) 글자·테두리 — 배경(*-soft)과 짝. 다크에서 별도 오버라이드 */
+  --warning-ink: #a15c00;
+  --warning-line: #ffe6b8;
+  --info-ink: #1b64da;
+  --info-line: #cfe4ff;
+  --success-ink: #0b7a5a;
+  --success-line: #b6f0da;
+  --danger-ink: #c92a37;
+  --danger-line: #f7c9ce;
+
+  /* 포커스 링(:focus-visible 공통) */
+  --focus-ring: 0 0 0 4px rgba(49, 130, 246, 0.28);
+
   font-family: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
     "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
   color-scheme: light;
+}
+
+/* ===================== 다크 테마 오버라이드 =====================
+   변수명은 그대로 두고 값만 재정의 → 컴포넌트 CSS는 무수정으로 전 화면 전환. */
+:root[data-theme="dark"] {
+  --bg: #0e1013;
+  --bg-subtle: #15171c;
+  --surface: #1b1e24;
+  --surface-2: #22262e;
+
+  --border: #2c313b;
+  --border-strong: #3c424e;
+
+  --text: #eaecef;
+  --text-2: #b0b6bf;
+  --text-3: #949aa4; /* 다크 표면에서 muted 텍스트가 4.5:1 넘도록 라이트보다 밝게 */
+
+  --primary: #4d94ff;
+  --primary-hover: #3f86f0; /* .primary 버튼 hover — 흰 글자 대비 유지 */
+  --primary-pressed: #2f74dd;
+  --primary-soft: #172a44;
+  /* --primary-btn 은 :root(#2272eb)를 그대로 상속 — 흰 글자 4.5:1 */
+
+  --danger: #ff6b73;
+  --danger-soft: #3a1d21;
+  --success: #34d399;
+  --success-soft: #102b23;
+  --warning: #fbbf4d;
+  --warning-soft: #33280f;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.6);
+
+  --glass: rgba(21, 23, 28, 0.82);
+  --glass-2: rgba(27, 30, 37, 0.95);
+
+  --warning-ink: #fbbf4d;
+  --warning-line: #4a3a17;
+  --info-ink: #8fbcff;
+  --info-line: #24406a;
+  --success-ink: #4ade9f;
+  --success-line: #1c4437;
+  --danger-ink: #ff8f96;
+  --danger-line: #5a2a2f;
+
+  --focus-ring: 0 0 0 4px rgba(122, 172, 255, 0.4);
+
+  color-scheme: dark;
 }
 
 * {
@@ -84,7 +151,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--glass);
   backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid var(--border);
 }
@@ -241,14 +308,14 @@ button:active {
   transform: translateY(1px);
 }
 button:disabled {
-  opacity: 0.45;
+  opacity: 0.6; /* 로딩 중 라벨/스피너가 읽히도록(0.45는 특히 다크에서 판독 불가) */
   cursor: not-allowed;
   transform: none;
 }
 
 button.primary {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--primary-btn);
+  border-color: var(--primary-btn);
   color: #fff;
   box-shadow: 0 2px 8px rgba(49, 130, 246, 0.28);
 }
@@ -364,18 +431,18 @@ input[type="checkbox"] {
   line-height: 1.55;
   margin-bottom: 14px;
   background: var(--warning-soft);
-  color: #a15c00;
-  border: 1px solid #ffe6b8;
+  color: var(--warning-ink);
+  border: 1px solid var(--warning-line);
 }
 .notice.info {
   background: var(--primary-soft);
-  color: #1b64da;
-  border-color: #cfe4ff;
+  color: var(--info-ink);
+  border-color: var(--info-line);
 }
 .notice.success {
   background: var(--success-soft);
-  color: #0b7a5a;
-  border-color: #b6f0da;
+  color: var(--success-ink);
+  border-color: var(--success-line);
 }
 .error {
   border-radius: var(--r-md);
@@ -383,8 +450,8 @@ input[type="checkbox"] {
   font-size: 14px;
   margin-bottom: 14px;
   background: var(--danger-soft);
-  color: #c92a37;
-  border: 1px solid #f7c9ce;
+  color: var(--danger-ink);
+  border: 1px solid var(--danger-line);
 }
 
 /* ===================== 레이아웃 헬퍼 ===================== */
@@ -553,7 +620,7 @@ input[type="checkbox"] {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--glass-2);
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   padding: 5px 8px 5px 12px;
@@ -600,7 +667,7 @@ input[type="checkbox"] {
   top: 16px;
   right: 16px;
   width: 280px;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--glass-2);
   backdrop-filter: blur(6px);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -624,7 +691,7 @@ input[type="checkbox"] {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-2);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--glass-2);
   border: 1px solid var(--border);
   padding: 5px 10px;
   border-radius: var(--r-pill);
@@ -712,4 +779,329 @@ button.query-preset:hover {
 .card.prev .inp {
   padding: 8px 12px;
   font-size: 14px;
+}
+
+/* ===================== 테마 토글(상단바) ===================== */
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 18px;
+  line-height: 1;
+}
+.theme-toggle:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+}
+
+/* ===================== 비용 배지(추출·탐색 버튼 옆) ===================== */
+.cost-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--warning-ink);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-line);
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+
+/* ===================== 버튼 로딩 스피너 ===================== */
+.spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 7px;
+  vertical-align: -1px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===================== 스켈레톤(로딩 자리표시자) ===================== */
+.skeleton {
+  display: block;
+  background: linear-gradient(
+    100deg,
+    var(--surface-2) 30%,
+    var(--bg-subtle) 50%,
+    var(--surface-2) 70%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.skeleton-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ===================== 확인 모달 ===================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.42);
+  backdrop-filter: blur(2px);
+  animation: overlay-in 0.14s ease;
+}
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 24px 26px 20px;
+  box-shadow: var(--shadow-lg);
+  animation: modal-in 0.16s ease;
+}
+.modal-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.modal-body {
+  margin: 0 0 20px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+  white-space: pre-line;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* 모달의 위험 확인 버튼은 소프트가 아니라 솔리드 빨강(주 액션임을 명확히) */
+.modal-actions button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.modal-actions button.danger:hover {
+  background: var(--danger);
+  filter: brightness(0.94);
+}
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* ===================== 토스트 알림 ===================== */
+.toast-wrap {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(380px, calc(100vw - 40px));
+  pointer-events: none; /* 래퍼는 클릭을 통과시켜 뒤 콘텐츠를 막지 않음 */
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  pointer-events: auto; /* 개별 토스트(닫기 버튼)는 클릭 가능 */
+  animation: toast-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.toast-icon {
+  flex: none;
+  font-weight: 800;
+  line-height: 1.5;
+}
+.toast-msg {
+  flex: 1;
+  word-break: break-word;
+}
+.toast-close {
+  flex: none;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 13px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.toast-close:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+.toast-success {
+  border-left: 4px solid var(--success);
+}
+.toast-success .toast-icon {
+  color: var(--success);
+}
+.toast-error {
+  border-left: 4px solid var(--danger);
+}
+.toast-error .toast-icon {
+  color: var(--danger);
+}
+.toast-info {
+  border-left: 4px solid var(--primary);
+}
+.toast-info .toast-icon {
+  color: var(--primary);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+/* ===================== 빈 상태(아이콘 + CTA) ===================== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 28px 16px;
+  color: var(--text-3);
+}
+.empty-state .empty-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+.empty-state .empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+/* ===================== 접근성: 포커스 링 =====================
+   outline을 사용한다(box-shadow와 달리 overflow:hidden 조상에 잘리지 않음 — 그래프/표 내부
+   컨트롤도 항상 보임). 마우스 클릭(:focus)에는 뜨지 않고 키보드 탐색(:focus-visible)에서만. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+/* 그래프 툴바 검색 인풋은 기본 포커스 스타일을 지웠으므로, 키보드 포커스만 별도 복원 */
+.graph-toolbar input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ===================== 모션 최소화 선호 ===================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .skeleton {
+    animation: none;
+    background: var(--surface-2);
+  }
+}
+
+/* ===================== 반응형(모바일/좁은 화면) ===================== */
+@media (max-width: 720px) {
+  .topbar-inner {
+    padding: 12px 16px;
+  }
+  .content {
+    padding: 20px 16px 72px;
+  }
+  .panel {
+    padding: 20px 18px;
+  }
+  .hero {
+    padding: 24px 2px 20px;
+  }
+  .ws-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .ws-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ws-tab {
+    white-space: nowrap;
+  }
+  /* 프로젝트 생성 폼·기타 인풋 행: 세로 스택 + 전체 폭 */
+  .stack-mobile {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .stack-mobile > input,
+  .stack-mobile > button {
+    width: 100%;
+  }
+  .graph-wrap {
+    height: 440px;
+  }
+  .node-panel {
+    width: min(240px, calc(100% - 32px));
+  }
+  .kg-table th,
+  .kg-table td {
+    padding: 9px 10px;
+  }
+  .kg-desc {
+    max-width: 200px;
+  }
+  .toast-wrap {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
 }

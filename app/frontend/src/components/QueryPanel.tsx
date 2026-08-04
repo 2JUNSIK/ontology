@@ -91,9 +91,15 @@ export default function QueryPanel({ projectId }: Props) {
       </div>
 
       <div className="row between" style={{ marginTop: 12 }}>
-        <span className="muted" />
+        <span className="cost-badge" title="이 작업은 Claude API를 호출합니다(키가 있으면 과금).">
+          💳 Claude 호출 · 과금 가능
+        </span>
         <button className="primary" onClick={handleQuery} disabled={loading || !question.trim()}>
-          {loading ? "탐색 중… (Claude 호출)" : "탐색 →"}
+          {loading ? (
+            <><span className="spinner" aria-hidden />탐색 중…</>
+          ) : (
+            "탐색 →"
+          )}
         </button>
       </div>
 
@@ -166,8 +172,10 @@ export default function QueryPanel({ projectId }: Props) {
               )}
 
               {!hasGraph && !hasRows && (
-                <div className="notice" style={{ marginTop: 14 }}>
-                  조건에 맞는 결과가 없습니다. 질문을 바꿔 다시 시도해 보세요.
+                <div className="empty-state" style={{ marginTop: 14 }}>
+                  <div className="empty-icon" aria-hidden>🔍</div>
+                  <div className="empty-title">조건에 맞는 결과가 없습니다</div>
+                  <div className="muted">질문을 바꾸거나 더 구체적으로 적어 다시 시도해 보세요.</div>
                 </div>
               )}
             </>

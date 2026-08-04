@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N12 완료** (2026-07-27 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N13 완료** (2026-08-04 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
 백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **N6**에서 구 v1(설문/스키마) 코드를 완전 제거해
@@ -19,13 +19,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 추가했다("실무형 지식그래프 강화" 방향). **N11**에서 **그래프 시각화를 강화**(degree 비례 노드 크기·
 노드 검색/하이라이트·전체보기(zoomToFit)/재정렬·정량값 amber 링, 순수 프론트 `GraphView.tsx`)하고,
 **N12**에서 지식활용 탐색에 **예시 질문 프리셋**(클릭 시 질문칸만 채움·자동 실행 안 함, `QueryPanel.tsx`)을
-추가했다. 다음: 프론트 디자인/기능 확장 계속.
+추가했다. **N13**에서 **디자인/UX 리프레시**(다크모드까지 풀 리프레시, 현재 Toss 톤 유지·정제)를 했다 —
+`index.css` 토큰을 테마화(`:root[data-theme="dark"]` 오버라이드+글래스/notice 토큰)하고, 공유 UI 프리미티브
+`theme.tsx`(ThemeProvider/useTheme)·`ThemeToggle`·`ui/{ConfirmDialog(useConfirm),Toast(useToast),Skeleton}`을
+추가해 `window.confirm`→커스텀 모달, 성공 피드백→토스트, 로딩→스켈레톤, 빈 상태 CTA, 비용 배지, 반응형·접근성
+(focus-visible·aria·배경 inert·prefers-reduced-motion)을 갖췄다(순수 프론트, API 과금 없음).
+다음: 프론트 디자인/기능 확장 계속.
 
-> **git 상태(2026-07-27)**: **N1~N12 전부 main에 머지·push 완료**(`main`=`origin/main`=`4d41960`).
-> N11 `feat-graph-visualization`·N12 `feat-query-presets`를 ff 머지한 뒤, 머지 끝난 피처 브랜치 6개
-> (`feat-graph-query`/`feat-knowledge-inventory`/`feat-ontology-enrichment`/`n6-cleanup`/
-> `feat-graph-visualization`/`feat-query-presets`)를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
-> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서, PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-04)**: **N1~N12는 main에 머지·push 완료**(`main`=`origin/main`=`4d41960`).
+> **N13(디자인/UX 리프레시)은 피처 브랜치 `feat-design-refresh`에서 작업 → 커밋 후 PR**(아직 main 미머지).
+> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
   API(§5), 마일스톤(N1~N12, §10), "진행 현황"이 모두 여기 있다.
@@ -48,6 +51,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     **`seed_ontology.py`의 `DOMAIN_GUIDE`(+임계값·수질항목 상수)는 extractor가 재사용하므로 유지.**
   - 프론트(`app/frontend/src/`): `App.tsx`(브랜드 부제목 제거됨), `api.ts`, `types.ts`,
     `components/{ProjectList,Workspace,ExtractionPreview,KnowledgeInventory,QueryPanel,GraphView}.tsx`.
+    [N13 신규] `theme.tsx`(ThemeProvider/useTheme — data-theme·localStorage·prefers-color-scheme),
+    `components/ThemeToggle.tsx`, `components/ui/{ConfirmDialog(useConfirm),Toast(useToast),Skeleton}.tsx`.
+    `main.tsx`가 App을 **ThemeProvider>ToastProvider>ConfirmProvider**로 감싼다. `index.css`에 다크 토큰
+    (`:root[data-theme="dark"]`)·글래스/notice-ink·line 토큰·모달·토스트·스켈레톤·`:focus-visible`(outline)·
+    `prefers-reduced-motion`·`@media(max-width:720px)`. **GraphView 캔버스색은 CSS 토큰을 못 쓰므로 `useTheme`으로
+    테마별 팔레트를 직접 고른다**(paint 콜백 인라인 유지 규약 준수).
     Workspace는 상단 **탭 2개**: **[지식설계]**=세로 스택(지식 입력 → 지식 현황 → 지식 그래프),
     **[지식활용]**=지식 탐색(`QueryPanel`). 탭 전환은 `display` 토글이라 각 탭 상태 보존. `QueryPanel`은
     자연어 질의→생성 Cypher 표시→결과 그래프(`GraphView` 재사용)+표(`KnowledgeInventory` `readOnly`

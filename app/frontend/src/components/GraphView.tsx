@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import type { GraphData } from "../types";
 import { formatQuantity } from "./KnowledgeInventory";
+import { useTheme } from "../theme";
 
 interface Props {
   data: GraphData;
@@ -12,6 +13,12 @@ const PALETTE = [
   "#3182f6", "#12b886", "#f59f00", "#f04452", "#7c3aed",
   "#e64980", "#0ca678", "#e8590c", "#4263eb", "#c2255c",
   "#1098ad", "#9c36b5",
+];
+// 다크 캔버스(#22262e)에서 3:1 이상 대비를 확보한 팔레트(보라·자주·남색을 밝게 조정).
+const PALETTE_DARK = [
+  "#5b9bff", "#2dd4a7", "#fbbf4d", "#ff6b73", "#9d6bff",
+  "#ff6fa3", "#20c997", "#ff8b4d", "#5b7cff", "#ff5c8a",
+  "#22b8cf", "#c77dff",
 ];
 const UNTYPED = "#adb5bd";
 const QUANTITY_RING = "#f59f00"; // 정량값(N10) 있는 노드 강조색(amber)
@@ -31,6 +38,7 @@ function endpointId(v: unknown): string {
 }
 
 export default function GraphView({ data }: Props) {
+  const { theme } = useTheme();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [ready, setReady] = useState(false); // 최초 시뮬레이션 정지 전엔 "전체 보기"를 막는다(빈 좌표 fit 방지).
@@ -50,13 +58,14 @@ export default function GraphView({ data }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // 타입별 색상 맵(미분류는 회색)
+  // 타입별 색상 맵(미분류는 회색). 테마에 따라 캔버스 대비가 좋은 팔레트를 고른다.
   const colorFor = useMemo(() => {
+    const palette = theme === "dark" ? PALETTE_DARK : PALETTE;
     const types = Array.from(new Set(data.nodes.map((n) => n.type).filter(Boolean)));
     const map = new Map<string, string>();
-    types.forEach((t, i) => map.set(t, PALETTE[i % PALETTE.length]));
+    types.forEach((t, i) => map.set(t, palette[i % palette.length]));
     return (type: string) => (type ? map.get(type) ?? UNTYPED : UNTYPED);
-  }, [data]);
+  }, [data, theme]);
 
   const legendTypes = useMemo(
     () => Array.from(new Set(data.nodes.map((n) => n.type).filter(Boolean))),
@@ -115,6 +124,39 @@ export default function GraphView({ data }: Props) {
 
   const searching = matchIds !== null;
 
+  // 캔버스에 직접 칠하는 색은 CSS 토큰(var)을 쓸 수 없어 테마에 따라 명시적으로 고른다.
+  // 노드 타입 팔레트(PALETTE)·정량 링(amber)은 두 테마 모두 대비가 충분해 유지하고,
+  // 배경·테두리·라벨·링크색만 테마화한다. (paint 콜백은 인라인 유지 규약 — 테마 변경 시
+  // 재렌더로 새 콜백 identity가 생겨 정적 그래프도 재드로우된다.)
+  const C =
+    theme === "dark"
+      ? {
+          bg: "#22262e",
+          stroke: "#e8eaed",
+          label: "#dfe3e8",
+          linkLabel: "#98a2b0",
+          linkOn: "rgba(150,160,172,0.6)",
+          linkOff: "rgba(150,160,172,0.16)",
+        }
+      : {
+          bg: "#f9fafb",
+          stroke: "#191f28",
+          label: "#191f28",
+          linkLabel: "#8b95a1",
+          linkOn: "rgba(139,149,161,0.55)",
+          linkOff: "rgba(139,149,161,0.14)",
+        };
+
+  // Esc로 노드 속성 패널 닫기(모달·그래프 패널 각각 독립적으로 동작).
+  useEffect(() => {
+    if (!selectedId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedId(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedId]);
+
   return (
     <div className="graph-wrap" ref={wrapRef}>
       {graphData.nodes.length === 0 ? (
@@ -161,7 +203,7 @@ export default function GraphView({ data }: Props) {
             width={size.w}
             height={size.h}
             graphData={graphData}
-            backgroundColor="#f9fafb"
+            backgroundColor={C.bg}
             linkDirectionalArrowLength={4}
             linkDirectionalArrowRelPos={1}
             linkWidth={1.2}
@@ -176,10 +218,10 @@ export default function GraphView({ data }: Props) {
             // linkColor / nodeCanvasObject / linkCanvasObject는 인라인으로 둔다.
             // 콜백 identity가 매 렌더 바뀌어야 정적(엔진 정지) 그래프에서도 재드로우가 트리거됨 → useCallback 금지.
             linkColor={(link: any) => {
-              if (!searching) return "rgba(139,149,161,0.55)";
+              if (!searching) return C.linkOn;
               const on =
                 matchIds!.has(endpointId(link.source)) || matchIds!.has(endpointId(link.target));
-              return on ? "rgba(139,149,161,0.55)" : "rgba(139,149,161,0.12)";
+              return on ? C.linkOn : C.linkOff;
             }}
             nodeCanvasObject={(node: any, ctx, globalScale) => {
               if (node.x == null || node.y == null) return; // 첫 틱 좌표 미초기화 가드
@@ -206,11 +248,11 @@ export default function GraphView({ data }: Props) {
 
               // 선택 노드 또는 검색 일치 노드에 강조 테두리.
               if (selectedId === node.id) {
-                ctx.strokeStyle = "#191f28";
+                ctx.strokeStyle = C.stroke;
                 ctx.lineWidth = 2 / globalScale;
                 ctx.stroke();
               } else if (searching && isMatch) {
-                ctx.strokeStyle = "#191f28";
+                ctx.strokeStyle = C.stroke;
                 ctx.lineWidth = 1.5 / globalScale;
                 ctx.stroke();
               }
@@ -219,7 +261,7 @@ export default function GraphView({ data }: Props) {
               ctx.font = `${fontSize}px 'Pretendard','Malgun Gothic',sans-serif`;
               ctx.textAlign = "center";
               ctx.textBaseline = "top";
-              ctx.fillStyle = "#191f28";
+              ctx.fillStyle = C.label;
               ctx.fillText(label, node.x, node.y + r + 1);
 
               ctx.globalAlpha = 1;
@@ -243,7 +285,7 @@ export default function GraphView({ data }: Props) {
               const fontSize = Math.max(9 / globalScale, 1.5);
               ctx.globalAlpha = dim ? 0.18 : 1;
               ctx.font = `${fontSize}px 'Pretendard','Malgun Gothic',sans-serif`;
-              ctx.fillStyle = "#8b95a1";
+              ctx.fillStyle = C.linkLabel;
               ctx.textAlign = "center";
               ctx.textBaseline = "middle";
               ctx.fillText(link.type, mx, my);
@@ -255,7 +297,11 @@ export default function GraphView({ data }: Props) {
             <div className="node-panel">
               <div className="row between">
                 <b>{selected.name}</b>
-                <button className="mini ghost" onClick={() => setSelectedId(null)}>
+                <button
+                  className="mini ghost"
+                  onClick={() => setSelectedId(null)}
+                  aria-label="속성 패널 닫기"
+                >
                   ✕
                 </button>
               </div>

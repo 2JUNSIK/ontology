@@ -28,8 +28,9 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 - **인터페이스**: 구조화 설문 **폐기** → **자유 자연어 지식 입력**.
 - **흐름**: 입력 → Claude 추출 → **미리보기/편집 → 확인 시 그래프 병합(MERGE)**. (자동반영 아님.)
 - **프로젝트**: 여러 프로젝트 **생성/전환/삭제**, 각 프로젝트가 독립 지식그래프.
-- **스택**: 백엔드 Python 3.14 + FastAPI, `neo4j` 6.2, `anthropic` 0.119(모델 `claude-opus-4-8`),
+- **스택**: 백엔드 Python 3.14 + FastAPI, `neo4j` 6.2.0, `anthropic` 0.119.0(모델 `claude-opus-4-8`),
   프론트 React + Vite + `react-force-graph-2d`. Neo4j 로컬 Docker `neo4j:5-community`(bolt 7687).
+  (`requirements.txt` floor는 실측 설치에 맞춰 `neo4j>=6.2,<7`·`anthropic>=0.119`로 고정.)
 - **재사용**: `neo4j_service`(드라이버/실행), `cypher_builder.escape_identifier`(인젝션 방어),
   Claude 구조화 출력 패턴, `GraphView`, `models`의 식별자 방어선(`_clean_identifier` 등).
 
@@ -61,8 +62,8 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
   지식 입력→지식 현황→지식 그래프 오케스트레이션), `ExtractionPreview`(편집/선택 후 ingest),
   `KnowledgeInventory`(노드·관계 데이터 표 + 개별 삭제 + 10개/페이지 페이지네이션), `GraphView`
   (controlled, 타입별 색상). 구 `SurveyWizard`/`SchemaReview`는 삭제.
-- **테스트**: 72 passed / 15 skipped(통합 opt-in). 통합 15개는 실 Neo4j(`RUN_NEO4J_TESTS=1`)로
-  별도 전부 통과. 프론트 `tsc --noEmit` 0 에러.
+- **테스트**: 177 passed / 27 skipped(204 collected·실패/에러 0, 통합 opt-in). 통합 27개는 실
+  Neo4j(`RUN_NEO4J_TESTS=1`)로 별도 전부 통과. 프론트 `tsc --noEmit` 0 에러. (2026-08-04 실측)
 - **적대적 검수 완료**(백엔드·프론트 각각): 백엔드 **must-fix 없음**(인젝션·원자성·프로젝트
   격리·503·모델 재검증 라이브 통과) + LOW 3건 반영(관계 중복 제거·stub 설명 `''` 정규화·
   ingest 시 제약 방어). 프론트 must-fix 반영(제외 노드를 참조하는 관계 유령화 방지, 삭제

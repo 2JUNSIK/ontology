@@ -1,8 +1,12 @@
+# 검증된 설치 버전(2026-08-04, app/backend/.venv): fastapi 0.139.2 · uvicorn 0.51.0 ·
+# neo4j 6.2.0 · anthropic 0.119.0 · pydantic 2.13.4 · pydantic-settings 2.14.2 ·
+# python-dotenv 1.2.2 · pytest 9.1.1 · httpx 0.28.1. 아래 floor는 이 버전대와 호환되도록 잡는다.
+
 # --- 런타임 ---
 fastapi>=0.115
 uvicorn[standard]>=0.30
-neo4j>=5.20
-anthropic>=0.40
+neo4j>=6.2,<7        # 코드가 neo4j 6.x 드라이버 API 전제(execute_read/execute_write, record.data())
+anthropic>=0.119     # messages.parse(output_format=...) → parsed_output 경로 사용
 pydantic>=2.7
 pydantic-settings>=2.3
 python-dotenv>=1.0

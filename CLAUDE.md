@@ -71,7 +71,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **명령은 실제로 동작**(venv·node_modules 존재). 개발 중 백엔드(uvicorn :8000)·프론트(vite :5173)
   서버가 백그라운드로 떠 있을 수 있다. **백엔드 코드 변경 시 재시작 필요**(--reload 미사용 시 —
   포트 8000 리스너 kill 후 재기동). 프론트는 Vite HMR로 자동 반영.
-- **테스트 124 passed / 25 skipped**(통합은 opt-in; `RUN_NEO4J_TESTS=1`로 통합 25개도 전부 통과).
+- **테스트 177 passed / 27 skipped**(204 collected·실패/에러 0; 통합 27개는 opt-in —
+  `RUN_NEO4J_TESTS=1`로 전부 통과. 2026-08-04 실측).
   GitHub <https://github.com/2JUNSIK/ontology.git> (main 브랜치). Windows 11 + PowerShell.
 
 ### 마일스톤마다 지키는 작업 방식 (사용자 상시 지시)
@@ -163,10 +164,25 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 
 - 백엔드: Python **3.14** + **FastAPI**, `neo4j` 드라이버 **6.2.0**(6.x API 기준 —
   `execute_query(...,routing_=,database_=)`, `session.run`/`execute_write`, `record.data()`),
-  `anthropic` **0.119**, 포트 8000.
+  `anthropic` **0.119.0**, 포트 8000. (실측 설치: fastapi 0.139.2·pydantic 2.13.4·
+  pydantic-settings 2.14.2·uvicorn 0.51.0·pytest 9.1.1. `requirements.txt` floor는 이에 맞춰
+  **`neo4j>=6.2,<7` / `anthropic>=0.119`** 로 고정 — 낮은 floor로 재설치 시 6.x API와 어긋나는 것 방지.)
 - 프론트: **React + Vite**, 그래프 시각화 **`react-force-graph-2d`**(경량 2D 전용), 포트 5173.
+  **백엔드 URL은 `api.ts`에 하드코딩**(`BASE_URL="http://localhost:8000"`, axios `timeout:120s` —
+  Claude 지연 대비). `VITE_` 환경변수 미사용 → **프로덕션 배포 시 `import.meta.env.VITE_API_BASE_URL`
+  등으로 환경변수화 필요**(알려진 제약). **프론트는 자동 테스트·린트 없음**(vitest/jest/testing-library/
+  eslint/prettier 미설치) — 품질 게이트는 `tsc --noEmit`뿐(아래 명령 참조).
 - Neo4j: 로컬 **Docker** `neo4j:5-community`(실행 시 5.26 community), `bolt://localhost:7687`,
   브라우저 7474.
+- **환경변수(`config.py` — `pydantic_settings.BaseSettings`, `app/.env` 절대경로 로드·`extra=ignore`·utf-8)**:
+
+  | 변수 | 기본값 | 비고 |
+  |---|---|---|
+  | `ANTHROPIC_API_KEY` | `""`(공백) | **필수**·백엔드 전용(프론트 노출 금지). 없으면 추출/탐색은 빈 결과로 우아한 열화 |
+  | `ANTHROPIC_MODEL` | `claude-opus-4-8` | 변경 시 §불변식 5 참조 |
+  | `NEO4J_URI` | `bolt://localhost:7687` | 로컬 Docker |
+  | `NEO4J_USER` | `neo4j` | |
+  | `NEO4J_PASSWORD` | `ontology_dev_pw` | dev 기본값 — **운영에서 변경 필수**(docker-compose `NEO4J_AUTH`도 이 값 사용) |
 
 실행(스캐폴드/venv/node_modules 존재 — 동작함):
 ```powershell
@@ -180,7 +196,7 @@ cd ..\frontend; npm install; npm run dev     # http://localhost:5173
 ```
 **테스트(핵심 게이트)** — venv의 python으로 직접 실행하는 것이 확실하다:
 ```powershell
-& "app\backend\.venv\Scripts\python.exe" -m pytest app\backend      # 124 passed / 25 skipped
+& "app\backend\.venv\Scripts\python.exe" -m pytest app\backend      # 177 passed / 27 skipped
 # Neo4j 통합 테스트는 opt-in(파괴적) — Neo4j 기동 상태에서만:
 $env:RUN_NEO4J_TESTS=1; & "app\backend\.venv\Scripts\python.exe" -m pytest app\backend\tests\test_kg_integration.py; Remove-Item Env:\RUN_NEO4J_TESTS
 ```
@@ -192,6 +208,48 @@ $env:RUN_NEO4J_TESTS=1; & "app\backend\.venv\Scripts\python.exe" -m pytest app\b
   쓰므로 파괴적 — 전용 테스트 프로젝트/라벨을 만들고 teardown에서 정리한다.
 - **프론트 타입체크**: `cd app/frontend; npx tsc --noEmit`(dev는 esbuild라 타입체크 생략됨).
   파일 저장 시 UTF-8 유지에 주의(과거 Write에서 널 바이트가 섞인 적 있음 → 저장 후 스캔 권장).
+
+### API 엔드포인트 (요약 — 상세·요청/응답은 PLAN.md §5)
+
+| 메서드 | 경로 | 용도 |
+|---|---|---|
+| GET | `/api/projects` | 프로젝트 목록 |
+| POST | `/api/projects` | 프로젝트 생성 |
+| DELETE | `/api/projects/{id}` | 프로젝트 삭제 |
+| POST | `/api/projects/{id}/extract` | 자연어→추출 미리보기(**Claude 호출·과금**) → `ExtractResponse{extraction,warnings}` |
+| POST | `/api/projects/{id}/ingest` | 편집본 MERGE 반영 → `{stats,graph}` |
+| GET | `/api/projects/{id}/graph` | 프로젝트 그래프 `{nodes,links}` |
+| DELETE | `/api/projects/{id}/entities` | 노드+연결관계 삭제 → `{stats,graph}` |
+| DELETE | `/api/projects/{id}/relations` | 관계만 삭제 → `{stats,graph}` |
+| POST | `/api/projects/{id}/query` | 자연어 탐색(text-to-cypher, **Claude 호출·과금**, 읽기 전용) |
+
+### 테스트 커버리지 맵 (`app/backend/tests/`)
+
+| 테스트 파일 | 커버 대상 |
+|---|---|
+| `test_models.py` | Entity/Relation/Extraction 검증·식별자 방어선·정량 속성 |
+| `test_kg_cypher_builder.py` | ingest/관계 MERGE 생성·순수성·인젝션·타입 그룹핑 |
+| `test_claude_extractor.py` | Claude 추출 흐름·구조화 출력·실패 열화(모킹) |
+| `test_text_to_cypher.py` | 자연어→읽기 Cypher 생성·실패 처리(모킹) |
+| `test_ontology_normalizer.py` | 별칭·타입 표준화·병합·domain/range 경고 |
+| `test_seed_ontology.py` | 도메인 상수·임계값·별칭 일관성 |
+| `test_neo4j_read_mapping.py` | 읽기 결과 매핑·프로젝트 사후 격리·메타 스크럽 |
+| `test_projects_api.py` | FastAPI 엔드포인트·요청 모델 정제 |
+| `test_kg_integration.py` | 실 Neo4j CRUD/ingest/query 왕복 (**27개·opt-in**, `RUN_NEO4J_TESTS=1`) |
+
+### 로깅 · 에러 처리
+
+- 각 모듈이 `logging.getLogger(__name__)` 사용(`neo4j_service`·`claude_extractor`·`text_to_cypher`·
+  `routers/projects`). `main.py`에 `logging.basicConfig`/전역 설정 **없음** → Python 표준 기본
+  (StreamHandler·WARNING 이상)만 나온다. 프로덕션에선 uvicorn 로그 설정 또는 `basicConfig` 권장.
+- 주요 예외 흐름:
+  - Neo4j 미가동/연결 불가 → `ServiceUnavailable`을 잡아 `Neo4jUnavailable`로 승격 → 라우터가 **HTTP 503**.
+  - 프로젝트 없음 → **HTTP 404**.
+  - Claude 실패/키 없음/빈 입력 → 빈 `Extraction` 반환(**우아한 열화**, 사용자는 수동 입력 지속).
+  - 읽기 경로(`/query`)의 변환 실패·`assert_read_only_cypher` 검증 실패·Cypher 문법/실행 오류는
+    **HTTP 200 + `error` 필드**로 우아하게 열화(재질문 유도 — HTTP 에러로 던지지 않음. `routers/projects.py`
+    `post_query`, `QueryResponse.error`). 연결 불가만 여기서도 503.
+  - 값/식별자 방어선 위반 → Pydantic `ValidationError`(추출 재검증에선 해당 항목만 드롭).
 
 ## 로컬 Docker / Neo4j 환경 (검증됨 — 재조사 불필요)
 
@@ -208,6 +266,11 @@ $env:RUN_NEO4J_TESTS=1; & "app\backend\.venv\Scripts\python.exe" -m pytest app\b
   `waterpipe`, `n8n` 등 다수 컨테이너/볼륨이 존재한다. 새 앱은 compose **프로젝트명**
   (`name: ontology-builder` 권장)과 **볼륨명**(`ontology_neo4j_data` 등)을 명확히 분리해
   기존 자산과 섞이지 않게 할 것.
+- **`app/docker-compose.yml` 실제 스펙**: 프로젝트명 `ontology-builder`, 컨테이너명 `ontology-neo4j`,
+  볼륨 `ontology_neo4j_data`(→`/data`)·`ontology_neo4j_logs`(→`/logs`), `restart: unless-stopped`,
+  healthcheck는 번들 `cypher-shell`로 Bolt 접속 확인(interval 10s·timeout 5s·retries 12·start_period 30s).
+  `NEO4J_AUTH`는 `.env`의 `NEO4J_PASSWORD`(없으면 `ontology_dev_pw`)를 사용 → **최초 기동 시의 계정이
+  볼륨에 고정되므로, 비밀번호를 바꾸려면 `docker compose down -v`로 볼륨을 초기화한 뒤 재기동**할 것.
 - **이전 neo4j 데이터**: `genesis_neo4j_data` 볼륨에 과거 작업 데이터가 보존돼 있다.
   MVP는 새 볼륨으로 깨끗이 시작하는 것을 기본으로 하되, 필요 시 이 볼륨을 조회/재사용할 수
   있음을 기억할 것.

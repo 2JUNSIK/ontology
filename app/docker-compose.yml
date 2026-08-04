@@ -1,4 +1,4 @@
-# Ontology Builder — 로컬 Neo4j (M0)
+# Ontology Builder — 로컬 Neo4j (v2)
 # 기존 다른 스택(genesis/cvat 등)과 충돌하지 않도록
 # 프로젝트명(name)·컨테이너명·볼륨명을 모두 ontology 계열로 분리한다.
 name: ontology-builder

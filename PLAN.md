@@ -49,8 +49,8 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 현재 Toss 톤을 유지·정제하면서 데모/현업 환경 다양성에 대응했다(순수 프론트, API 과금 없음).
 **다음: 프론트 디자인/기능 확장 계속.**
 
-> **git 상태(2026-08-04)**: **N1~N13 전부 main에 머지·push 완료**(`main`=`origin/main`=`06e8812`).
-> N13 `feat-design-refresh`를 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
+> **git 상태(2026-08-04)**: **N1~N13 + 문서 정합성 보강 전부 main에 머지·push 완료**(`main`=`origin/main`=`8d6c778`).
+> 문서 정합성 보강 `docs-consistency-refresh`를 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
 > `gh` 미설치 → 다음 작업은 새 피처 브랜치에서 하고 PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),

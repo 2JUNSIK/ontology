@@ -26,9 +26,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 (focus-visible·aria·배경 inert·prefers-reduced-motion)을 갖췄다(순수 프론트, API 과금 없음).
 다음: 프론트 디자인/기능 확장 계속.
 
-> **git 상태(2026-08-04)**: **N1~N12는 main에 머지·push 완료**(`main`=`origin/main`=`4d41960`).
-> **N13(디자인/UX 리프레시)은 피처 브랜치 `feat-design-refresh`에서 작업 → 커밋 후 PR**(아직 main 미머지).
-> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-04)**: **N1~N13 전부 main에 머지·push 완료**(`main`=`origin/main`=`06e8812`).
+> N13 `feat-design-refresh`를 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
+> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서, PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
   API(§5), 마일스톤(N1~N12, §10), "진행 현황"이 모두 여기 있다.

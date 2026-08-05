@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N13 완료(main) + N14 완료(feature 브랜치·main 미머지)** (2026-08-05 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N14 완료** (2026-08-05 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
 백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **N6**에서 구 v1(설문/스키마) 코드를 완전 제거해
@@ -34,13 +34,11 @@ docs/blog로 검증)를 더해 이 앱 맥락(녹조/수질 예시 위주 + 급�
 kinetic 동사·RAG→OAG·Disruption Bot·재사용 해자) → ③ **디지털 트윈 가설 검토**(관계기반 추론이 핵심,
 실시간 상태·행동 보강) → ④ **수자원 트윈 확장 시나리오**(대청호 녹조). 적대적 사실검증·접근성 검수
 반영, 순수 프론트·API 과금 없음·tsc/build 통과.
-다음: 프론트 디자인/기능 확장 계속(N14 main 머지 대기).
+다음: 프론트 디자인/기능 확장 계속.
 
-> **git 상태(2026-08-05)**: **N1~N13 + 문서 정합성 보강은 main에 머지 완료**(`main`=`origin/main`=`7800d3e`).
-> **N14(온톨로지 설명 페이지)는 `feat-ontology-guide` 브랜치에 커밋·푸시 완료·main 미머지**(커밋 3개:
-> `b615130` 모달 초안 → `24d2ff3` 팔란티어/트윈 심화 → `203531d` 페이지 전환+수자원 트윈). PR 대기
-> (<https://github.com/2JUNSIK/ontology/pull/new/feat-ontology-guide>). `gh` 미설치 → PR은 push 후 반환된
-> 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-05)**: **N1~N14 전부 main에 머지·push 완료**(`main`=`origin/main`=`809cf07`).
+> N14(온톨로지 설명 페이지)를 `feat-ontology-guide`에서 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
+> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서, PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
   API(§5), 마일스톤(N1~N14, §10), "진행 현황"이 모두 여기 있다.

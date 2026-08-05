@@ -53,12 +53,11 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 화면 페이지 전환), `App.tsx` 헤더 페이지 토글, `index.css` 페이지 셸. 내용: 그래프/온톨로지 기초 → 팔란티어
 심층(의사결정 모델·semantic+kinetic·RAG→OAG·해자) → 디지털 트윈 가설 검토(관계기반 추론이 핵심 + 실시간
 상태·행동 보강) → 수자원 트윈 확장 시나리오(대청호 녹조). 순수 프론트·과금 없음·tsc/build 통과.
-**다음: 프론트 디자인/기능 확장 계속(N14 main 머지 대기).**
+**다음: 프론트 디자인/기능 확장 계속.**
 
-> **git 상태(2026-08-05)**: **N1~N13은 main에 머지 완료**(`main`=`origin/main`=`7800d3e`). **N14(온톨로지
-> 설명 페이지)는 `feat-ontology-guide`에 커밋·푸시 완료·main 미머지**(커밋 3개: `b615130`→`24d2ff3`→`203531d`),
-> PR 대기(<https://github.com/2JUNSIK/ontology/pull/new/feat-ontology-guide>).
-> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-05)**: **N1~N14 전부 main에 머지·push 완료**(`main`=`origin/main`=`809cf07`).
+> N14(온톨로지 설명 페이지)를 `feat-ontology-guide`에서 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
+> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서 하고 PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
@@ -273,7 +272,7 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
   콘텐츠가 많아 **전체화면 페이지로 전환**(createPortal/inert/focus-trap 제거, onBack/Esc/트리거 포커스 복원,
   헤더 토글 aria-pressed, 참고링크 새 창). 적대적 검수 2회(a11y·**사실검증**) must-fix 없음 + SHOULD 반영
   (토글 aria-label 상태화·포커스 복원·인용처럼 보이던 예시를 저자해설로 전환·2차자료 표현 완화). **API 과금
-  없음.** tsc/build 통과. *(feature 브랜치 `feat-ontology-guide`, main 미머지)*
+  없음.** tsc/build 통과. *(main 머지 완료 · 2026-08-05)*
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

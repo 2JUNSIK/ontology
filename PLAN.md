@@ -34,9 +34,9 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 - **재사용**: `neo4j_service`(드라이버/실행), `cypher_builder.escape_identifier`(인젝션 방어),
   Claude 구조화 출력 패턴, `GraphView`, `models`의 식별자 방어선(`_clean_identifier` 등).
 
-## 진행 현황 (2026-08-04 기준)
+## 진행 현황 (2026-08-05 기준)
 
-**완료: N1~N13** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
+**완료: N1~N14** (백엔드 v2 + 프론트 재작성 + 구 v1 코드 완전 제거 + 지식 현황 데이터 관리 +
 **자연어 그래프 탐색(text-to-cypher, 읽기 경로)** + **표준 어휘 정규화(N9)** + **정량 속성 구조화(N10)** +
 **그래프 시각화 강화(N11)** + **탐색 예시 질문 프리셋(N12)**). end-to-end 동작 확인. 앱이 이제 입력(쓰기)뿐
 아니라 **자연어 질의로 탐색(읽기)** 까지 하는 양방향이 됐고, "실무형 지식그래프 강화"로 **① 표준 타입/관계 어휘
@@ -47,11 +47,18 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 진입장벽을 낮췄다. **N13**에서 **디자인/UX 리프레시**(다크모드 토글·커스텀 확인 모달·토스트 알림·스켈레톤
 로딩·빈 상태 CTA·비용 배지·반응형·접근성[focus-visible·aria·inert·prefers-reduced-motion])를 추가해
 현재 Toss 톤을 유지·정제하면서 데모/현업 환경 다양성에 대응했다(순수 프론트, API 과금 없음).
-**다음: 프론트 디자인/기능 확장 계속.**
+**N14**에서 **온톨로지 설명자료(헤더 '온톨로지란?' → 앱 내 전체화면 페이지)**를 추가했다 — 교재의
+그래프DB·온톨로지 강의에 **팔란티어 온톨로지·디지털 트윈** 공개자료(공식 docs/blog로 검증)를 더해 이 앱
+맥락(녹조/수질 예시 위주)으로 쉽게 재구성한 직원 교육자료. 신규 `components/OntologyGuide.tsx`(모달→전체
+화면 페이지 전환), `App.tsx` 헤더 페이지 토글, `index.css` 페이지 셸. 내용: 그래프/온톨로지 기초 → 팔란티어
+심층(의사결정 모델·semantic+kinetic·RAG→OAG·해자) → 디지털 트윈 가설 검토(관계기반 추론이 핵심 + 실시간
+상태·행동 보강) → 수자원 트윈 확장 시나리오(대청호 녹조). 순수 프론트·과금 없음·tsc/build 통과.
+**다음: 프론트 디자인/기능 확장 계속(N14 main 머지 대기).**
 
-> **git 상태(2026-08-04)**: **N1~N13 + 문서 정합성 보강 전부 main에 머지·push 완료**(`main`=`origin/main`=`8d6c778`).
-> 문서 정합성 보강 `docs-consistency-refresh`를 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
-> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서 하고 PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-05)**: **N1~N13은 main에 머지 완료**(`main`=`origin/main`=`7800d3e`). **N14(온톨로지
+> 설명 페이지)는 `feat-ontology-guide`에 커밋·푸시 완료·main 미머지**(커밋 3개: `b615130`→`24d2ff3`→`203531d`),
+> PR 대기(<https://github.com/2JUNSIK/ontology/pull/new/feat-ontology-guide>).
+> `gh` 미설치 → PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
@@ -173,6 +180,9 @@ class Extraction(BaseModel):   # Claude 추출 결과(미리보기/ingest 공용
 
 ## 7. 프론트 화면 (ProjectList → Workspace)
 
+- **상단바(topbar)** — 브랜드 + **'온톨로지란?'**(N14, 클릭 시 content 영역을 **전체화면 온톨로지 설명
+  페이지**로 토글) + 테마 토글(N13). 설명 페이지는 돌아가기/Esc로 닫고 트리거 버튼으로 포커스 복원.
+
 1. **ProjectList** — 프로젝트 목록/생성/선택/삭제.
 2. **Workspace** — 상단 **탭 2개**(지식설계 / 지식활용). 탭 전환은 `display` 토글이라 각 탭 상태를
    보존한다(탐색 결과가 탭 이동으로 사라지지 않음).
@@ -253,6 +263,17 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
   (focus-visible outline=clip-proof, aria-modal/describedby, prefers-reduced-motion). 적대적 검수 2회(정확성·a11y)
   후 must-fix 반영: useConfirm 이중오픈/언마운트 promise 유실, 토스트 pointer-events, primary 버튼/다크 muted 대비,
   disabled 가독성, 캔버스 저대비 노드색. **API 과금 없음.** `tsc --noEmit` 0에러.
+- **[x] N14** 온톨로지 설명자료(순수 프론트, `components/OntologyGuide.tsx` + `App.tsx` 헤더 + `index.css`) —
+  헤더 우측 '온톨로지란?' 버튼이 여는 **앱 내 전체화면 설명 페이지**. 교재(그래프DB→지식그래프→온톨로지→
+  GraphRAG)에 **팔란티어 온톨로지·디지털 트윈** 공개자료(공식 docs/blog 검증)를 더해 직원용으로 재구성.
+  내용: ① 그래프/프로퍼티그래프/온톨로지 기초·공리와 추론 → ② **팔란티어 심층**(온톨로지=의사결정 모델,
+  semantic 명사 + kinetic 동사, RAG→OAG, Disruption Bot, 재사용·전환비용 해자) → ③ **디지털 트윈 가설
+  검토**('물리세계 이해 + 관계기반 추론'을 맞다고 확인하되 실시간 상태·행동 보강) → ④ **수자원 트윈 확장
+  시나리오**(대청호 녹조: 센서→경계 판정→하류 영향 식별→대응조치 승인·실행→피드백). 처음 모달로 만들었다가
+  콘텐츠가 많아 **전체화면 페이지로 전환**(createPortal/inert/focus-trap 제거, onBack/Esc/트리거 포커스 복원,
+  헤더 토글 aria-pressed, 참고링크 새 창). 적대적 검수 2회(a11y·**사실검증**) must-fix 없음 + SHOULD 반영
+  (토글 aria-label 상태화·포커스 복원·인용처럼 보이던 예시를 저자해설로 전환·2차자료 표현 완화). **API 과금
+  없음.** tsc/build 통과. *(feature 브랜치 `feat-ontology-guide`, main 미머지)*
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

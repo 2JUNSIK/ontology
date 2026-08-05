@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N13 완료** (2026-08-04 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N13 완료(main) + N14 완료(feature 브랜치·main 미머지)** (2026-08-05 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
 백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **N6**에서 구 v1(설문/스키마) 코드를 완전 제거해
@@ -24,14 +24,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `theme.tsx`(ThemeProvider/useTheme)·`ThemeToggle`·`ui/{ConfirmDialog(useConfirm),Toast(useToast),Skeleton}`을
 추가해 `window.confirm`→커스텀 모달, 성공 피드백→토스트, 로딩→스켈레톤, 빈 상태 CTA, 비용 배지, 반응형·접근성
 (focus-visible·aria·배경 inert·prefers-reduced-motion)을 갖췄다(순수 프론트, API 과금 없음).
-다음: 프론트 디자인/기능 확장 계속.
+**N14**에서 **온톨로지 설명자료**(헤더 우측 '온톨로지란?' → 앱 내 **전체화면 페이지**)를 추가했다 —
+교재(그래프DB→지식그래프→온톨로지→GraphRAG)에 **팔란티어 온톨로지·디지털 트윈** 공개자료(공식
+docs/blog로 검증)를 더해 이 앱 맥락(녹조/수질 예시 위주 + 급수계통 보조)으로 쉽게 재구성한 직원
+교육자료. 신규 `components/OntologyGuide.tsx`(처음 모달로 만들었다가 콘텐츠가 많아 **전체화면
+페이지로 전환** — createPortal/inert/focus-trap 제거·onBack/Esc/트리거 포커스 복원), `App.tsx` 헤더에
+페이지 토글 버튼(`.help-btn`, aria-pressed), `index.css`에 페이지 셸(`.guide-page/.guide-article/.guide-*`).
+내용: ① 그래프/온톨로지 기초·공리와 추론 → ② **팔란티어 심층**(온톨로지=의사결정 모델·semantic 명사 +
+kinetic 동사·RAG→OAG·Disruption Bot·재사용 해자) → ③ **디지털 트윈 가설 검토**(관계기반 추론이 핵심,
+실시간 상태·행동 보강) → ④ **수자원 트윈 확장 시나리오**(대청호 녹조). 적대적 사실검증·접근성 검수
+반영, 순수 프론트·API 과금 없음·tsc/build 통과.
+다음: 프론트 디자인/기능 확장 계속(N14 main 머지 대기).
 
-> **git 상태(2026-08-04)**: **N1~N13 + 문서 정합성 보강 전부 main에 머지·push 완료**(`main`=`origin/main`=`8d6c778`).
-> 문서 정합성 보강 `docs-consistency-refresh`를 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
-> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서, PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-05)**: **N1~N13 + 문서 정합성 보강은 main에 머지 완료**(`main`=`origin/main`=`7800d3e`).
+> **N14(온톨로지 설명 페이지)는 `feat-ontology-guide` 브랜치에 커밋·푸시 완료·main 미머지**(커밋 3개:
+> `b615130` 모달 초안 → `24d2ff3` 팔란티어/트윈 심화 → `203531d` 페이지 전환+수자원 트윈). PR 대기
+> (<https://github.com/2JUNSIK/ontology/pull/new/feat-ontology-guide>). `gh` 미설치 → PR은 push 후 반환된
+> 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
-  API(§5), 마일스톤(N1~N12, §10), "진행 현황"이 모두 여기 있다.
+  API(§5), 마일스톤(N1~N14, §10), "진행 현황"이 모두 여기 있다.
 - **현재 코드**(`app/backend/app/`):
   - [v2 핵심] `models.py`(Entity/Relation/Extraction + 식별자 방어선 + **정량 속성**
     `value/unit/comparator/observed_at`, comparator 화이트리스트·value NaN/Inf/bool 거부·고아 정량 정규화),
@@ -49,10 +61,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     `cypher_builder`의 스키마-메타 함수·`neo4j_service`의 `commit_schema`/`fetch_graph`·
     `models.py`의 v1 모델(OntologySchema/NodeLabel/…)·`seed_ontology.SEED_ONTOLOGY`를 모두 삭제.
     **`seed_ontology.py`의 `DOMAIN_GUIDE`(+임계값·수질항목 상수)는 extractor가 재사용하므로 유지.**
-  - 프론트(`app/frontend/src/`): `App.tsx`(브랜드 부제목 제거됨), `api.ts`, `types.ts`,
+  - 프론트(`app/frontend/src/`): `App.tsx`(브랜드 부제목 제거됨 + **N14** 헤더 우측 '온톨로지란?'
+    전체화면 페이지 토글 버튼·토글 상태에 따라 content 영역을 설명 페이지로 교체), `api.ts`, `types.ts`,
     `components/{ProjectList,Workspace,ExtractionPreview,KnowledgeInventory,QueryPanel,GraphView}.tsx`.
     [N13 신규] `theme.tsx`(ThemeProvider/useTheme — data-theme·localStorage·prefers-color-scheme),
     `components/ThemeToggle.tsx`, `components/ui/{ConfirmDialog(useConfirm),Toast(useToast),Skeleton}.tsx`.
+    [N14 신규] `components/OntologyGuide.tsx`(헤더 버튼이 여는 **전체화면 설명 페이지** — 그래프/온톨로지
+    기초 + 팔란티어 심층 + 디지털 트윈 가설검토 + 수자원 트윈 시나리오; ConfirmDialog 접근성 패턴을
+    페이지형으로 축약: onBack·Esc·트리거 포커스 복원, 참고링크 새 창. `index.css` `.guide-*` 페이지 셸.
+    순수 프론트, API 과금 없음).
     `main.tsx`가 App을 **ThemeProvider>ToastProvider>ConfirmProvider**로 감싼다. `index.css`에 다크 토큰
     (`:root[data-theme="dark"]`)·글래스/notice-ink·line 토큰·모달·토스트·스켈레톤·`:focus-visible`(outline)·
     `prefers-reduced-motion`·`@media(max-width:720px)`. **GraphView 캔버스색은 CSS 토큰을 못 쓰므로 `useTheme`으로

@@ -315,7 +315,100 @@ export default function OntologyGuide({ onClose }: { onClose: () => void }) {
             </p>
           </section>
 
-          {/* 8 */}
+          {/* 심화 구분선 */}
+          <div className="guide-divider" role="separator" aria-label="심화 섹션 시작">
+            <span>심화 · 더 깊이 — 왜 ‘사업’이 되고, ‘진짜 디지털 트윈’의 핵심인가</span>
+          </div>
+
+          {/* 8 — 팔란티어 */}
+          <section className="guide-sec">
+            <div className="guide-num">8</div>
+            <h3 className="guide-h">온톨로지는 어떻게 ‘사업’이 되나 — 팔란티어의 교훈</h3>
+            <p className="guide-p">
+              온톨로지가 추상적 이론처럼 보여도, 세계적 데이터 기업 <b>팔란티어(Palantir)</b>의 핵심 자산이자
+              사업 모델이 바로 이것입니다. 팔란티어는 흩어진 시스템 데이터를 조직의 ‘의미 모델’로 묶은{" "}
+              <b>온톨로지(Ontology)</b>를 만들고, 그 위에 모든 앱·분석·AI가 올라타게 합니다. 그리고 이걸{" "}
+              <b>“조직의 디지털 트윈(a digital twin of the organization)”</b>이라고 부릅니다.
+            </p>
+            <div className="guide-quote">
+              “온톨로지는 <b>데이터가 아니라</b>, 기업의 복잡하게 얽힌 <b>‘의사결정’</b>을 표현하도록 설계됐다.”
+              <span className="guide-cite">— Palantir</span>
+            </div>
+            <p className="guide-p">
+              핵심 구조는 <b>명사 + 동사</b>입니다.
+            </p>
+            <ul className="guide-list">
+              <li>
+                <b>의미(semantic) = 명사</b> · 객체·속성·관계 — <b>이 앱이 만드는 바로 그 층</b>.
+              </li>
+              <li>
+                <b>동역학(kinetic) = 동사</b> · 액션·함수 — “재고를 재배정하라”, “밸브를 잠가라”처럼 현실에
+                개입하는 <b>통제된 행동</b>. 팔란티어 왈 <b>“의미는 반드시 동역학과 짝지어야 한다.”</b>
+              </li>
+            </ul>
+            <p className="guide-p">왜 이게 ‘사업’이 되는가(해자·moat):</p>
+            <ol className="guide-steps">
+              <li>
+                <b>재사용의 복리</b> — 한 번 조직을 온톨로지로 모델링하면, 새 앱·분석·AI가 매번 데이터를
+                재해석하지 않고 <b>같은 의미 층을 공유</b>합니다. 쓸수록 가치가 쌓이고 갈아타기 어려워집니다.
+              </li>
+              <li>
+                <b>AI 시대의 접점</b> — LLM을 혼자 두면 그럴듯한 환각을 냅니다. 온톨로지에 묶으면{" "}
+                <b>RAG처럼 데이터에만 기대지 않고 객체·관계·행동에까지</b> 직접 접속합니다.{" "}
+                <b>“살아있는 주문 객체를 조회하는 AI는 존재하지 않는 주문번호를 지어낼 수 없다.”</b> AI는{" "}
+                <b>통제된 액션</b>으로만 움직이고, 최종 실행은 사람이 승인합니다.
+              </li>
+            </ol>
+            <div className="guide-callout">
+              한 줄 — <b>데이터를 ‘의미·관계·행동’으로 바꾼 조직만이</b> AI를 안전하게, 반복 가능하게 굴릴 수
+              있습니다. 그 층 자체가 자산입니다.
+            </div>
+          </section>
+
+          {/* 9 — 디지털 트윈 가설 검토 */}
+          <section className="guide-sec">
+            <div className="guide-num">9</div>
+            <h3 className="guide-h">그래서 ‘진짜’ 디지털 트윈이란 — 관계기반 추론</h3>
+            <div className="guide-example">
+              <span className="guide-example-tag">검토할 생각</span>
+              “진정한 의미의 디지털 트윈은 <b>물리세계를 이해하는 것</b> + <b>관계기반의 추론</b>이다.”
+            </div>
+            <div className="guide-callout guide-callout-final">
+              <b>검토 결과 — 맞습니다. 핵심을 정확히 짚었습니다.</b>
+            </div>
+            <p className="guide-p">
+              흔히 ‘디지털 트윈’이라 불리는 많은 것은 사실 <b>3D 시각화 + 센서 수치 대시보드</b>에 그칩니다.
+              보기엔 그럴듯하지만, “이 관로가 터지면 어디가 단수되나?”, “이 사고의 원인은?”에는 답하지
+              못합니다 — 그건 <b>관계를 따라가는 추론</b>이라야 나오는 답이기 때문입니다(교재의 단수 영향
+              분석이 정확히 이것).
+            </p>
+            <p className="guide-p">
+              학계도 같은 방향입니다. 기하(3D)·센서만으론 부족하고, <b>온톨로지·지식그래프로 의미와 관계를
+              얹어 추론</b>하는 <b>‘인지형(cognitive)·의미형(semantic) 디지털 트윈’</b>이 다음 단계로 꼽힙니다.
+              팔란티어가 <b>물리적 형체가 없는 ‘조직’</b>에도 디지털 트윈을 말할 수 있는 이유가 바로 이것 —
+              트윈의 본질은 3D 모형이 아니라 <b>객체+관계+행동의 의미 모델</b>이기 때문입니다.
+            </p>
+            <p className="guide-p">
+              다만 두 가지를 더하면 <b>더 정확</b>해집니다(다듬기).
+            </p>
+            <ul className="guide-list">
+              <li>
+                ‘물리세계 이해’는 정지된 구조만이 아니라 <b>살아있는 상태(실시간 센서)와 거동(시뮬레이션)</b>
+                까지 포함해야 합니다. 관계 모델과 실시간 상태가 만나야 ‘지금’의 추론이 됩니다.
+              </li>
+              <li>
+                추론에서 끝나지 않고 <b>다시 세계로 개입(행동)</b>할 때 고리가 닫힙니다. 이게 팔란티어의
+                ‘동역학(kinetic)’이자, 성숙한 트윈이 지향하는 지점입니다.
+              </li>
+            </ul>
+            <div className="guide-callout">
+              다듬은 정리 — <b>진짜 디지털 트윈 = ① 실시간 상태(센서) + ② 의미·관계(온톨로지/지식그래프) + ③
+              그 위의 추론·시뮬레이션 + ④ 다시 현실로의 행동.</b> 당신의 문장은 이 중 <b>이해(①②)와
+              추론(③)</b>을 관통하는 가장 중요한 통찰을 담고 있습니다.
+            </div>
+          </section>
+
+          {/* ▶ 마무리 */}
           <section className="guide-sec guide-sec-final">
             <div className="guide-num">▶</div>
             <h3 className="guide-h">그래서, 이 앱에서 여러분이 하는 일</h3>
@@ -347,15 +440,57 @@ export default function OntologyGuide({ onClose }: { onClose: () => void }) {
                 번역·표현만, 사실은 그래프가.
               </li>
             </ol>
+            <p className="guide-p">
+              여러분이 이 앱에서 문장으로 쌓는 것은 바로 그 <b>의미·관계 층(온톨로지의 뼈대)</b> —
+              팔란티어가 사업화하고, ‘진짜 디지털 트윈’이 요구하는 바로 그 층입니다. 여기에 실시간 데이터와
+              행동을 얹으면 K-water의 <b>수자원 디지털 트윈</b>으로 확장됩니다.
+            </p>
             <div className="guide-callout guide-callout-final">
-              한 줄 요약 — 여러분은 온톨로지 이론을 몰라도, <b>‘문장 쓰기’만으로 조직의 지식그래프를 함께
-              만들고</b> 있습니다.
+              한 줄 요약 — 여러분은 온톨로지 이론을 몰라도, <b>‘문장 쓰기’만으로 조직의 지식그래프(=디지털
+              트윈의 뼈대)를 함께 만들고</b> 있습니다.
             </div>
           </section>
 
+          <div className="guide-refs">
+            <div className="guide-refs-title">더 깊이 알아보기 <span className="guide-refs-note">(새 창에서 열림)</span></div>
+            <ul>
+              <li>
+                <a
+                  className="guide-link"
+                  href="https://www.palantir.com/docs/foundry/ontology/overview"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Palantir Docs — Ontology overview (“a digital twin of the organization”)
+                </a>
+              </li>
+              <li>
+                <a
+                  className="guide-link"
+                  href="https://blog.palantir.com/connecting-ai-to-decisions-with-the-palantir-ontology-c73f7b0a1a72"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Palantir Blog — Connecting AI to Decisions with the Palantir Ontology
+                </a>
+              </li>
+              <li>
+                <a
+                  className="guide-link"
+                  href="https://www.tandfonline.com/doi/full/10.1080/00207543.2021.2014591"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Tao et al. — The emergence of cognitive digital twin (Int. J. of Production Research, 2021)
+                </a>
+              </li>
+            </ul>
+          </div>
+
           <p className="guide-source">
             이 자료는 사내 교육 <b>‘2026 마이크로디그리 – 빅데이터 분석(이채석, KAIST)’</b>의 그래프DB·
-            온톨로지 강의를 이 앱의 맥락으로 쉽게 재구성한 것입니다.
+            온톨로지 강의를 토대로, 팔란티어 온톨로지·디지털 트윈에 대한 공개 자료를 더해 이 앱의 맥락으로
+            재구성한 것입니다.
           </p>
 
           <div className="guide-foot-actions">

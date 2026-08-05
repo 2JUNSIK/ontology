@@ -1349,8 +1349,67 @@ button.query-preset:hover {
   color: var(--success-ink);
 }
 
+/* 심화 구분선 */
+.guide-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 30px 0 4px;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.guide-divider::before,
+.guide-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border-strong);
+}
+.guide-divider span {
+  flex: 0 1 auto;
+  text-align: center;
+}
+
+/* 더 깊이 알아보기(참고 링크) */
+.guide-refs {
+  margin: 26px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.guide-refs-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.guide-refs-note {
+  font-weight: 500;
+  color: var(--text-3);
+}
+.guide-refs ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+.guide-refs li {
+  margin-bottom: 5px;
+}
+.guide-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+.guide-link:hover {
+  text-decoration: underline;
+}
+
 .guide-source {
-  margin: 26px 0 20px;
+  margin: 20px 0;
   padding-top: 16px;
   border-top: 1px solid var(--border);
   font-size: 12.5px;

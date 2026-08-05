@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createProject, deleteProject, errMessage, listProjects } from "./api";
 import ProjectList from "./components/ProjectList";
 import Workspace from "./components/Workspace";
@@ -16,6 +16,7 @@ export default function App() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const helpBtnRef = useRef<HTMLButtonElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -90,10 +91,11 @@ export default function App() {
           <div className="topbar-actions">
             <button
               type="button"
-              className="help-btn"
-              onClick={() => setGuideOpen(true)}
-              aria-haspopup="dialog"
-              aria-label="온톨로지란? 설명 열기"
+              ref={helpBtnRef}
+              className={"help-btn" + (guideOpen ? " active" : "")}
+              onClick={() => setGuideOpen((v) => !v)}
+              aria-pressed={guideOpen}
+              aria-label={guideOpen ? "온톨로지 설명 페이지 닫기" : "온톨로지 설명 페이지 열기"}
               title="온톨로지란?"
             >
               <span className="help-btn-icon" aria-hidden>?</span>
@@ -104,23 +106,32 @@ export default function App() {
         </div>
       </header>
 
-      {guideOpen && <OntologyGuide onClose={() => setGuideOpen(false)} />}
-
       <main className="content">
-        {error && <div className="error">{error}</div>}
-
-        {current ? (
-          <Workspace project={current} onBack={() => { setCurrent(null); refresh(); }} />
-        ) : (
-          <ProjectList
-            projects={projects}
-            loading={loading}
-            creating={creating}
-            deletingId={deletingId}
-            onSelect={setCurrent}
-            onCreate={handleCreate}
-            onDelete={handleDelete}
+        {guideOpen ? (
+          <OntologyGuide
+            onBack={() => {
+              setGuideOpen(false);
+              helpBtnRef.current?.focus(); // 페이지를 떠날 때 트리거 버튼으로 포커스 복원
+            }}
           />
+        ) : (
+          <>
+            {error && <div className="error">{error}</div>}
+
+            {current ? (
+              <Workspace project={current} onBack={() => { setCurrent(null); refresh(); }} />
+            ) : (
+              <ProjectList
+                projects={projects}
+                loading={loading}
+                creating={creating}
+                deletingId={deletingId}
+                onSelect={setCurrent}
+                onCreate={handleCreate}
+                onDelete={handleDelete}
+              />
+            )}
+          </>
         )}
       </main>
     </div>

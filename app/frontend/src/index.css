@@ -1142,24 +1142,42 @@ button.query-preset:hover {
   line-height: 1;
 }
 
-/* ===================== 온톨로지 설명 모달 (넓은 스크롤) ===================== */
-.modal-guide {
-  max-width: min(760px, 94vw);
-  max-height: min(88vh, 940px);
-  padding: 0; /* .modal 기본 패딩 무효화 — head/body가 자체 패딩 관리 */
-  display: flex;
-  flex-direction: column;
-  overflow: hidden; /* 둥근 모서리 클립 + body만 스크롤 */
+/* ===================== 온톨로지 설명 페이지 (전체화면) ===================== */
+.help-btn.active {
+  background: var(--primary-soft);
+  border-color: var(--primary-soft);
+  color: var(--primary);
 }
-.guide-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 22px 26px 16px;
+.guide-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.guide-page-bar {
+  margin-bottom: 10px;
+}
+.guide-back {
+  padding: 8px 15px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.guide-back:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.guide-article {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 32px 40px 36px;
+  box-shadow: var(--shadow-sm);
+}
+.guide-hero {
+  padding-bottom: 6px;
 }
 .guide-eyebrow {
   display: inline-block;
@@ -1169,43 +1187,20 @@ button.query-preset:hover {
   background: var(--primary-soft);
   padding: 3px 10px;
   border-radius: var(--r-pill);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
-.guide-title {
-  margin: 0;
-  font-size: 21px;
+.guide-hero-title {
+  margin: 0 0 14px;
+  font-size: 30px;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
   color: var(--text);
-}
-.guide-close {
-  flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-2);
-  font-size: 15px;
-}
-.guide-close:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-.guide-body {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 20px 26px 24px;
 }
 .guide-lead {
-  margin: 0 0 4px;
-  font-size: 15.5px;
-  line-height: 1.7;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.75;
   color: var(--text-2);
 }
 
@@ -1270,6 +1265,42 @@ button.query-preset:hover {
 }
 .guide-steps > li {
   margin-bottom: 12px;
+}
+.guide-sublist {
+  margin: 6px 0 4px;
+  padding-left: 18px;
+  list-style: circle;
+}
+.guide-sublist li {
+  margin-bottom: 5px;
+}
+
+/* 섹션 안 소제목(팔란티어/수자원 트윈 심화용) */
+.guide-h4 {
+  margin: 18px 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+/* 시나리오 박스(수자원 트윈 한 컷) */
+.guide-scenario {
+  margin: 4px 0 12px;
+  padding: 14px 16px 6px;
+  border: 1px solid var(--info-line);
+  border-radius: var(--r-md);
+  background: var(--primary-soft);
+}
+.guide-scenario-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+.guide-scenario .guide-steps {
+  margin-bottom: 8px;
+  color: var(--text);
 }
 
 .guide-code {
@@ -1425,7 +1456,7 @@ button.query-preset:hover {
   justify-content: flex-end;
 }
 
-/* 온톨로지 모달·헤더 버튼: 좁은 화면 대응 */
+/* 온톨로지 페이지·헤더 버튼: 좁은 화면 대응 */
 @media (max-width: 720px) {
   .help-btn {
     padding: 9px 12px;
@@ -1433,13 +1464,10 @@ button.query-preset:hover {
   .help-btn-label {
     display: none; /* 좁으면 아이콘(?)만 노출 */
   }
-  .guide-head {
-    padding: 18px 18px 14px;
+  .guide-article {
+    padding: 22px 18px 24px;
   }
-  .guide-body {
-    padding: 16px 18px 20px;
-  }
-  .modal-guide {
-    max-height: 92vh;
+  .guide-hero-title {
+    font-size: 24px;
   }
 }

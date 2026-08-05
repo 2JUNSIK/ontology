@@ -3,6 +3,7 @@ import { createProject, deleteProject, errMessage, listProjects } from "./api";
 import ProjectList from "./components/ProjectList";
 import Workspace from "./components/Workspace";
 import ThemeToggle from "./components/ThemeToggle";
+import OntologyGuide from "./components/OntologyGuide";
 import { useToast } from "./components/ui/Toast";
 import { useConfirm } from "./components/ui/ConfirmDialog";
 import type { Project } from "./types";
@@ -14,6 +15,7 @@ export default function App() {
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -85,9 +87,24 @@ export default function App() {
               <div className="brand-title">지식그래프 빌더</div>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="help-btn"
+              onClick={() => setGuideOpen(true)}
+              aria-haspopup="dialog"
+              aria-label="온톨로지란? 설명 열기"
+              title="온톨로지란?"
+            >
+              <span className="help-btn-icon" aria-hidden>?</span>
+              <span className="help-btn-label">온톨로지란?</span>
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
+
+      {guideOpen && <OntologyGuide onClose={() => setGuideOpen(false)} />}
 
       <main className="content">
         {error && <div className="error">{error}</div>}

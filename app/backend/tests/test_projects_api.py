@@ -101,3 +101,53 @@ def test_extract_response_shape():
     r = ExtractResponse(extraction=Extraction(), warnings=["경고"])
     assert r.extraction.entities == [] and r.warnings == ["경고"]
     assert ExtractResponse(extraction=Extraction()).warnings == []
+
+
+# ---- N15 /seed 시드 온톨로지 엔드포인트 (Neo4j 함수는 monkeypatch — 실 DB 불필요) ----
+
+
+def test_seed_endpoint_returns_stats_and_graph(monkeypatch):
+    """POST /seed는 Claude 미호출로 표준 시드를 ingest에 넘기고 {stats, graph}를 반환한다."""
+    from app.routers import projects as prj
+
+    captured: dict = {}
+    monkeypatch.setattr(prj, "get_project", lambda pid: {"id": pid, "name": "p"})
+
+    def fake_ingest(pid, extraction):
+        captured["pid"] = pid
+        captured["extraction"] = extraction
+        return {"stats": {"statements": 3, "counters": {}}}
+
+    monkeypatch.setattr(prj, "ingest", fake_ingest)
+    monkeypatch.setattr(prj, "fetch_project_graph", lambda pid: {"nodes": [], "links": []})
+
+    r = client.post("/api/projects/pid1/seed")
+    assert r.status_code == 200
+    body = r.json()
+    assert "stats" in body and "graph" in body
+    # 시드가 실제로 ingest로 전달됐고 표준 콘텐츠(조류경보제)를 담는다.
+    assert captured["pid"] == "pid1"
+    assert any(e.name == "조류경보제" for e in captured["extraction"].entities)
+
+
+def test_seed_endpoint_404_when_project_missing(monkeypatch):
+    from app.routers import projects as prj
+
+    monkeypatch.setattr(prj, "get_project", lambda pid: None)
+    r = client.post("/api/projects/missing/seed")
+    assert r.status_code == 404
+
+
+def test_seed_endpoint_503_when_neo4j_unavailable(monkeypatch):
+    """ingest가 Neo4jUnavailable을 던지면 라우터가 503으로 승격한다(기존 흐름 재사용)."""
+    from app.neo4j_service import Neo4jUnavailable
+    from app.routers import projects as prj
+
+    monkeypatch.setattr(prj, "get_project", lambda pid: {"id": pid, "name": "p"})
+
+    def boom(pid, extraction):
+        raise Neo4jUnavailable("down")
+
+    monkeypatch.setattr(prj, "ingest", boom)
+    r = client.post("/api/projects/pid1/seed")
+    assert r.status_code == 503

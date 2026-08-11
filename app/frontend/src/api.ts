@@ -57,6 +57,15 @@ export async function getProjectGraph(projectId: string): Promise<GraphData> {
   return data;
 }
 
+// 표준 녹조·수질 시드 온톨로지를 프로젝트 그래프에 병합한다(스타터팩).
+// Claude를 호출하지 않아 과금이 없다. MERGE라 여러 번 호출해도 멱등하다. 갱신된 그래프를 돌려받는다.
+export async function seedProject(projectId: string): Promise<IngestResponse> {
+  const { data } = await client.post<IngestResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/seed`,
+  );
+  return data;
+}
+
 // 노드 1개 삭제(연결된 관계도 함께 제거). 갱신된 그래프를 돌려받는다.
 export async function deleteEntity(projectId: string, name: string): Promise<IngestResponse> {
   const { data } = await client.delete<IngestResponse>(

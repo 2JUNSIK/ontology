@@ -142,6 +142,62 @@ def test_canonicalize_collapses_to_self_loop_and_dedups():
     assert out.relations[0].description == "A"
 
 
+def test_canonicalize_preserves_quantitative_props():
+    """정규화가 정량 속성(N10)을 보존해야 한다 — 추출·반영 경로가 모두 canonicalize를 타므로
+    여기서 유실되면 임계값이 ingest에 도달하지 못한다(회귀 방지)."""
+    ext = Extraction(
+        entities=[
+            Entity(
+                name="관심",
+                type="경보단계",
+                value=1000,
+                unit="cells/mL",
+                comparator=">=",
+                observed_at="2026-08-01T00:00:00",
+            )
+        ],
+        relations=[],
+    )
+    out = canonicalize_extraction(ext)
+    e = out.entities[0]
+    assert e.value == 1000
+    assert e.unit == "cells/mL"
+    assert e.comparator == ">="
+    assert e.observed_at == "2026-08-01T00:00:00"
+
+
+def test_merge_entity_preserves_quantitative_props():
+    """별칭 병합 시에도 정량 속성이 first-wins로 승계돼야 한다(value는 None을 빈 값 취급)."""
+    ext = Extraction(
+        entities=[
+            # 별칭(값 없음)이 먼저, 표준명(값 있음)이 뒤 → 하나로 접히며 값이 승계돼야 한다
+            Entity(name="남조류세포", type="수질항목"),
+            Entity(name="남조류세포수", type="수질항목", value=10000, unit="cells/mL", comparator=">="),
+        ],
+        relations=[],
+    )
+    out = canonicalize_extraction(ext)
+    assert [e.name for e in out.entities] == ["남조류세포수"]
+    e = out.entities[0]
+    assert e.value == 10000
+    assert e.unit == "cells/mL"
+    assert e.comparator == ">="
+
+
+def test_merge_entity_both_values_first_wins():
+    """두 엔티티 모두 value가 있으면 first-wins(먼저 등장)로 승계한다."""
+    ext = Extraction(
+        entities=[
+            Entity(name="관심", type="경보단계", value=1000, unit="cells/mL"),
+            Entity(name="관심", type="경보단계", value=2000, unit="cells/mL"),
+        ],
+        relations=[],
+    )
+    out = canonicalize_extraction(ext)
+    assert len(out.entities) == 1
+    assert out.entities[0].value == 1000  # 먼저 등장 우선
+
+
 def test_validate_domain_range_ok_and_unknown_pass():
     ext = Extraction(
         entities=[

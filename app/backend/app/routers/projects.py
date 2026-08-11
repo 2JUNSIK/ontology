@@ -29,6 +29,7 @@ from ..neo4j_service import (
     list_projects,
     run_read_query,
 )
+from ..seed_graph import build_seed_extraction
 from ..text_to_cypher import generate_query
 
 logger = logging.getLogger(__name__)
@@ -167,6 +168,21 @@ def post_ingest(project_id: str, extraction: Extraction) -> IngestResponse:
     """
     _require_project(project_id)
     extraction = canonicalize_extraction(extraction)
+    result = _svc(ingest, project_id, extraction)
+    graph = _svc(fetch_project_graph, project_id)
+    return IngestResponse(stats=result["stats"], graph=graph)
+
+
+@router.post("/{project_id}/seed", response_model=IngestResponse)
+def post_seed(project_id: str) -> IngestResponse:
+    """표준 녹조·수질 시드 온톨로지를 프로젝트 그래프에 병합한다(스타터팩, N15).
+
+    **Claude를 호출하지 않는다 → 과금 0.** 시드는 큐레이션된 표준 Extraction이며, ingest와 동일한
+    방어선·정규화를 그대로 탄다. MERGE라 재실행/기존 데이터와의 겹침 모두 멱등하다(같은 이름 병합).
+    비어있지 않은 프로젝트에 불러오면 표준 노드가 사용자 노드와 이름 기준으로 섞인다(프론트에서 고지).
+    """
+    _require_project(project_id)
+    extraction = canonicalize_extraction(build_seed_extraction())
     result = _svc(ingest, project_id, extraction)
     graph = _svc(fetch_project_graph, project_id)
     return IngestResponse(stats=result["stats"], graph=graph)

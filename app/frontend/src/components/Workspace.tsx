@@ -6,6 +6,7 @@ import {
   extractKnowledge,
   getProjectGraph,
   ingestExtraction,
+  seedProject,
 } from "../api";
 import type { Extraction, GraphData, Project } from "../types";
 import ExtractionPreview from "./ExtractionPreview";
@@ -34,6 +35,7 @@ export default function Workspace({ project, onBack }: Props) {
   const [loadingGraph, setLoadingGraph] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [ingesting, setIngesting] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,6 +116,33 @@ export default function Workspace({ project, onBack }: Props) {
       toast.error(msg);
     } finally {
       setIngesting(false);
+    }
+  }
+
+  async function handleSeed() {
+    if (seeding) return; // 진행 중 이중 클릭 방지
+    const ok = await confirm({
+      title: "표준 온톨로지 불러오기",
+      body:
+        "녹조·수질 표준 지식그래프(조류경보제·수질항목·상수원·오염원·대응조치)를 이 프로젝트에 추가합니다.\n\n· Claude를 호출하지 않아 과금이 없습니다.\n· 같은 이름의 노드는 병합되며, 여러 번 눌러도 중복이 생기지 않습니다.",
+      confirmText: "불러오기",
+    });
+    if (!ok) return;
+    setSeeding(true);
+    setError(null);
+    try {
+      const res = await seedProject(project.id);
+      setGraph(res.graph);
+      const c = (res.stats?.counters ?? {}) as Record<string, number>;
+      toast.success(
+        `표준 온톨로지를 불러왔습니다 — 새 노드 ${c.nodes_created ?? 0}개, 새 관계 ${c.relationships_created ?? 0}개 (기존 항목은 병합됨)`,
+      );
+    } catch (e) {
+      const msg = errMessage(e);
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setSeeding(false);
     }
   }
 
@@ -203,6 +232,31 @@ export default function Workspace({ project, onBack }: Props) {
 
       {/* 지식설계 탭: 지식 입력 → 지식 현황 → 지식 그래프 (구축·관리·확인) */}
       <div className="workspace-stack" style={{ display: tab === "design" ? "flex" : "none" }}>
+        {/* 0. 빈 상태 CTA — 표준 시드 온톨로지로 시작하기(무과금). 미리보기 중엔 숨김. */}
+        {!loadingGraph && graph.nodes.length === 0 && !extraction && (
+          <div className="panel">
+            <h2 className="section-title">표준 온톨로지로 시작하기</h2>
+            <p className="section-desc" style={{ marginBottom: 12 }}>
+              빈 그래프가 막막하다면, 녹조·수질 <b>표준 지식그래프</b>(조류경보제 3단계·임계값,
+              수질항목, 상수원·측정소, 오염원, 대응조치)를 먼저 불러오세요. 이 뼈대 위에 현장 지식을
+              문장으로 얹으면 됩니다.
+            </p>
+            <div className="notice info" style={{ marginBottom: 14 }}>
+              ✅ 이 작업은 <b>Claude를 호출하지 않습니다</b>(무과금). 같은 이름 노드는 병합되어
+              여러 번 눌러도 중복이 생기지 않습니다.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button className="primary" onClick={handleSeed} disabled={seeding}>
+                {seeding ? (
+                  <><span className="spinner" aria-hidden />불러오는 중…</>
+                ) : (
+                  "표준 온톨로지 불러오기"
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 1. 지식 입력 */}
         <div>
           <div className="panel">
@@ -263,9 +317,19 @@ export default function Workspace({ project, onBack }: Props) {
               <h2 className="section-title">지식 현황</h2>
               <p className="section-desc">노드와 관계를 데이터로 관리합니다. 개별로 삭제할 수 있어요.</p>
             </div>
-            <button className="mini" onClick={loadGraph} disabled={loadingGraph}>
-              새로고침
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="mini"
+                onClick={handleSeed}
+                disabled={seeding || loadingGraph}
+                title="녹조·수질 표준 지식그래프를 불러옵니다(무과금·중복 없이 병합)."
+              >
+                {seeding ? "불러오는 중…" : "표준 온톨로지"}
+              </button>
+              <button className="mini" onClick={loadGraph} disabled={loadingGraph}>
+                새로고침
+              </button>
+            </div>
           </div>
           {loadingGraph ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

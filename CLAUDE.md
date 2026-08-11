@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 저장소의 현재 상태 (반드시 먼저 읽을 것)
 
-**v2 피벗 완료. 진행: N1~N14 완료** (2026-08-05 기준). 제품이 "구조화 설문형 온톨로지 설계"
+**v2 피벗 완료. 진행: N1~N15 완료** (2026-08-11 기준). 제품이 "구조화 설문형 온톨로지 설계"
 (v1)에서 **"자연어 지식 입력형 지식그래프 빌더"**(v2)로 바뀌었다(사용자 요청). 직원이 문장으로
 지식을 입력하면 Claude가 엔티티(노드)·관계를 추출해 **프로젝트별 지식그래프에 MERGE 누적**한다.
 백엔드+프론트 재작성이 끝나 end-to-end 동작한다. **N6**에서 구 v1(설문/스키마) 코드를 완전 제거해
@@ -34,7 +34,17 @@ docs/blog로 검증)를 더해 이 앱 맥락(녹조/수질 예시 위주 + 급�
 kinetic 동사·RAG→OAG·Disruption Bot·재사용 해자) → ③ **디지털 트윈 가설 검토**(관계기반 추론이 핵심,
 실시간 상태·행동 보강) → ④ **수자원 트윈 확장 시나리오**(대청호 녹조). 적대적 사실검증·접근성 검수
 반영, 순수 프론트·API 과금 없음·tsc/build 통과.
-다음: 프론트 디자인/기능 확장 계속.
+**N15**에서 **표준 시드 온톨로지**(녹조·수질 스타터팩)를 추가했다 — 앱이 더 이상 '빈 그릇'이 아니게,
+큐레이션된 기준 지식그래프를 프로젝트에 한 번에 불러온다("콘텐츠 강화" 첫 마일스톤). 신규
+`seed_graph.build_seed_extraction()`(순수 함수·표준 어휘만 사용해 domain/range 무경고: 조류경보제 체계·
+수질/수문 항목·상수원/측정소/기관·오염원·현상/생물/대응조치; 발령 임계값은 **경보단계 노드의 정량 속성**으로
+`ALGAE_ALERT_THRESHOLDS` 재사용; 규제값 description에 출처·"확인 필요" 경량 provenance), `POST /seed`
+(**Claude 미호출·과금 0**, 기존 `ingest` 재사용, MERGE 멱등), 프론트 빈 상태 CTA 배너 + 지식현황 보조 버튼.
+**정규화 정량 유실 버그도 함께 수정**: `canonicalize_extraction`·`_merge_entity`가 Entity 재생성 시 정량
+4필드(value/unit/comparator/observed_at)를 누락해 **N10 임계값이 추출·반영 경로에서 유실**되던 것을 보존하도록
+고치고 회귀 테스트 추가(추출·ingest 모두 canonicalize를 타므로 실제 저장이 안 되던 문제).
+다음(콘텐츠 로드맵): N16 근거·출처 레이어(provenance) → N17 인과·메커니즘 지식(독소·냄새물질·우점종·정수처리)
+→ N18 예시질문·입력 템플릿·용어사전.
 
 > **git 상태(2026-08-05)**: **N1~N14 전부 main에 머지·push 완료**(`main`=`origin/main`=`809cf07`).
 > N14(온톨로지 설명 페이지)를 `feat-ontology-guide`에서 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
@@ -48,13 +58,16 @@ kinetic 동사·RAG→OAG·Disruption Bot·재사용 해자) → ③ **디지털
     `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`,
     entity MERGE에 정량 속성 SET, +읽기경로 `assert_read_only_cypher`),
     **`ontology_normalizer.py`**(N9 순수 함수: `canonicalize_extraction` 별칭·타입 표준화+병합,
-    `validate_domain_range` 경고), `neo4j_service.py`(프로젝트 CRUD·`ingest`·`fetch_project_graph`·
+    `validate_domain_range` 경고. **N15에서 정량 4필드 보존 버그 수정** — Entity 재생성/`_merge_entity` 시
+    value/unit/comparator/observed_at를 누락하던 것을 first-wins로 승계),
+    **`seed_graph.py`**(N15 순수 함수: `build_seed_extraction()` — 표준 어휘만 쓰는 녹조·수질 시드
+    Extraction, 발령 임계값은 경보단계 노드 정량 속성으로), `neo4j_service.py`(프로젝트 CRUD·`ingest`·`fetch_project_graph`·
     `delete_entity`·`delete_relation`, +읽기경로 `run_read_query`/`_collect_graph`/`_scalarize`),
     `claude_extractor.py`(추출 후 `canonicalize_extraction` 후처리), `text_to_cypher.py`(자연어→읽기전용
     Cypher 생성), `seed_ontology.py`(`DOMAIN_GUIDE` + **표준 어휘 상수** `STANDARD_ENTITY_TYPES`/
     `STANDARD_RELATION_TYPES`/`TYPE_ALIASES`/`CANONICAL_ALIASES`/`RELATION_CONSTRAINTS`),
-    `routers/projects.py`(+ `DELETE /entities`·`/relations`, `POST /query`, `POST /extract`는
-    `ExtractResponse{extraction,warnings}` 래핑), `config.py`, `main.py`.
+    `routers/projects.py`(+ `DELETE /entities`·`/relations`, `POST /query`, `POST /seed`(N15 시드 병합·무과금),
+    `POST /extract`는 `ExtractResponse{extraction,warnings}` 래핑), `config.py`, `main.py`.
   - [v1 제거 완료(N6)] `survey.py`·`claude_enricher.py`·`routers/{survey,schema,graph}.py`·
     `cypher_builder`의 스키마-메타 함수·`neo4j_service`의 `commit_schema`/`fetch_graph`·
     `models.py`의 v1 모델(OntologySchema/NodeLabel/…)·`seed_ontology.SEED_ONTOLOGY`를 모두 삭제.
@@ -86,8 +99,9 @@ kinetic 동사·RAG→OAG·Disruption Bot·재사용 해자) → ③ **디지털
 - **명령은 실제로 동작**(venv·node_modules 존재). 개발 중 백엔드(uvicorn :8000)·프론트(vite :5173)
   서버가 백그라운드로 떠 있을 수 있다. **백엔드 코드 변경 시 재시작 필요**(--reload 미사용 시 —
   포트 8000 리스너 kill 후 재기동). 프론트는 Vite HMR로 자동 반영.
-- **테스트 177 passed / 27 skipped**(204 collected·실패/에러 0; 통합 27개는 opt-in —
-  `RUN_NEO4J_TESTS=1`로 전부 통과. 2026-08-04 실측).
+- **테스트 193 passed / 30 skipped**(223 collected·실패/에러 0; N15에서 +19: `test_seed_graph`(10)·
+  정규화 정량보존·병합(3)·`/seed` API monkeypatch 200/404/503(3)·통합 시드 왕복/멱등/사용자병합(3). 통합
+  30개는 opt-in — `RUN_NEO4J_TESTS=1`로 전부 통과. 2026-08-11 실측).
   GitHub <https://github.com/2JUNSIK/ontology.git> (main 브랜치). Windows 11 + PowerShell.
 
 ### 마일스톤마다 지키는 작업 방식 (사용자 상시 지시)
@@ -233,6 +247,7 @@ $env:RUN_NEO4J_TESTS=1; & "app\backend\.venv\Scripts\python.exe" -m pytest app\b
 | DELETE | `/api/projects/{id}` | 프로젝트 삭제 |
 | POST | `/api/projects/{id}/extract` | 자연어→추출 미리보기(**Claude 호출·과금**) → `ExtractResponse{extraction,warnings}` |
 | POST | `/api/projects/{id}/ingest` | 편집본 MERGE 반영 → `{stats,graph}` |
+| POST | `/api/projects/{id}/seed` | **표준 시드 온톨로지** 병합(N15, **Claude 미호출·과금 0**, MERGE 멱등) → `{stats,graph}` |
 | GET | `/api/projects/{id}/graph` | 프로젝트 그래프 `{nodes,links}` |
 | DELETE | `/api/projects/{id}/entities` | 노드+연결관계 삭제 → `{stats,graph}` |
 | DELETE | `/api/projects/{id}/relations` | 관계만 삭제 → `{stats,graph}` |
@@ -246,7 +261,8 @@ $env:RUN_NEO4J_TESTS=1; & "app\backend\.venv\Scripts\python.exe" -m pytest app\b
 | `test_kg_cypher_builder.py` | ingest/관계 MERGE 생성·순수성·인젝션·타입 그룹핑 |
 | `test_claude_extractor.py` | Claude 추출 흐름·구조화 출력·실패 열화(모킹) |
 | `test_text_to_cypher.py` | 자연어→읽기 Cypher 생성·실패 처리(모킹) |
-| `test_ontology_normalizer.py` | 별칭·타입 표준화·병합·domain/range 경고 |
+| `test_ontology_normalizer.py` | 별칭·타입 표준화·병합·domain/range 경고·**정량 속성 보존(N15 회귀)** |
+| `test_seed_graph.py` | **표준 시드 온톨로지**(N15): 표준어휘·domain/range 무경고·끊긴엣지 없음·임계값 상수일치·멱등·인젝션 안전 |
 | `test_seed_ontology.py` | 도메인 상수·임계값·별칭 일관성 |
 | `test_neo4j_read_mapping.py` | 읽기 결과 매핑·프로젝트 사후 격리·메타 스크럽 |
 | `test_projects_api.py` | FastAPI 엔드포인트·요청 모델 정제 |

@@ -273,6 +273,21 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
   헤더 토글 aria-pressed, 참고링크 새 창). 적대적 검수 2회(a11y·**사실검증**) must-fix 없음 + SHOULD 반영
   (토글 aria-label 상태화·포커스 복원·인용처럼 보이던 예시를 저자해설로 전환·2차자료 표현 완화). **API 과금
   없음.** tsc/build 통과. *(main 머지 완료 · 2026-08-05)*
+- **[x] N15** 표준 시드 온톨로지(녹조·수질 스타터팩 — "콘텐츠 강화" 첫 마일스톤) — 앱이 더 이상
+  '빈 그릇'이 아니게, 큐레이션된 기준 지식그래프를 프로젝트에 한 번에 불러온다. 신규
+  `seed_graph.build_seed_extraction()`(**순수 함수**, 표준 어휘만 사용 → `validate_domain_range` **무경고**;
+  블록 ① 조류경보제 체계 ② 수질·수문 항목 ③ 상수원·측정소·기관 ④ 오염원 ⑤ 현상·생물·대응조치; 발령
+  임계값은 **경보단계 노드의 정량 속성(N10)** 으로 — 지표 하나가 3개 임계값을 못 가지므로 —
+  `ALGAE_ALERT_THRESHOLDS` 재사용; 규제값 description에 출처·"확인 필요" 경량 provenance),
+  `POST /api/projects/{id}/seed`(**Claude 미호출·과금 0**, 기존 `ingest` 재사용, MERGE라 재시드·사용자
+  입력 겹침 모두 멱등), 프론트 빈 상태 CTA 배너 + 지식현황 보조 버튼(`api.seedProject`,
+  `Workspace` useConfirm/useToast). **정규화 정량 유실 버그 수정 포함**: `canonicalize_extraction`·
+  `_merge_entity`가 Entity 재생성 시 정량 4필드(value/unit/comparator/observed_at)를 누락 → 추출·반영
+  경로 모두 canonicalize를 타므로 **N10 임계값이 ingest 전에 유실**되던 것을 보존하도록 고치고 회귀 테스트
+  추가. 테스트: `test_seed_graph`(10) + 정규화 정량보존·병합(3) + API monkeypatch 200/404/503(3) + 통합 시드
+  왕복/멱등/사용자병합(3·opt-in). 적대적 코드검수(must-fix 0) + 도메인 사실검증 반영(2024년 조류독소 기준
+  병행측정·마이크로시스틴 노드 추가, 팔당=광역상수원 표현). tsc/pytest 통과. *(후속 콘텐츠 로드맵: N16 근거·
+  출처 레이어, N17 인과·메커니즘 지식, N18 예시질문·템플릿·용어사전.)*
 
 각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
 

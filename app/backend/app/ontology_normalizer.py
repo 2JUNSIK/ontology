@@ -53,17 +53,25 @@ def canonical_type(type_label: str) -> str:
 
 
 def _merge_entity(a: Entity, b: Entity) -> Entity:
-    """같은 이름의 두 엔티티 병합. 타입·설명은 비어있지 않은 쪽(먼저 등장 `a`) 우선.
+    """같은 이름의 두 엔티티 병합. 타입·설명·정량 속성은 비어있지 않은 쪽(먼저 등장 `a`) 우선.
 
     주의(문서화된 동작): 서로 다른 non-empty 타입이 충돌하면 먼저 등장한 `a.type`만 남고
     `b.type`은 버려진다. `Entity.type`이 단일 문자열이라(SSoT 모델 한계) 한 노드에 여러 타입을
     보존할 수 없기 때문이다 — 결정적으로 '문장 근거가 먼저 나온 타입'을 신뢰한다. 다중 타입
     보존이 필요해지면 모델(§1) 확장이 선행되어야 한다.
+
+    정량 속성(N10)도 first-wins로 승계한다(value는 None을 '빈 값'으로 취급) — cypher_builder.
+    `_entity_set`의 병합 정책과 동일하다. Entity의 coherence 검증이 value 없는 unit/comparator를
+    자동으로 떨어내므로 병합 결과는 항상 정합적이다.
     """
     return Entity(
         name=a.name,
         type=a.type or b.type,
         description=a.description or b.description,
+        value=a.value if a.value is not None else b.value,
+        unit=a.unit or b.unit,
+        comparator=a.comparator or b.comparator,
+        observed_at=a.observed_at or b.observed_at,
     )
 
 
@@ -91,6 +99,12 @@ def canonicalize_extraction(ext: Extraction) -> Extraction:
                 name=canonical_name(e.name),
                 type=canonical_type(e.type),
                 description=e.description,
+                # 정량 속성(N10)은 정규화 대상이 아니지만 반드시 보존한다 — 재생성 시 빠뜨리면
+                # 임계값·대표 수치가 ingest 전에 조용히 유실된다(추출·반영 경로 모두 이 함수를 탄다).
+                value=e.value,
+                unit=e.unit,
+                comparator=e.comparator,
+                observed_at=e.observed_at,
             )
         except (ValidationError, ValueError):
             continue

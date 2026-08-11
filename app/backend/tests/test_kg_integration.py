@@ -293,6 +293,66 @@ def test_delete_entity_isolated_across_projects(project):
         neo4j_service.delete_project(other["id"])
 
 
+# ---- N15 표준 시드 온톨로지: 왕복 · 멱등 · 엔드포인트 · 사용자 병합 ----
+
+
+def test_seed_roundtrip_persists_thresholds(project):
+    from app import neo4j_service
+    from app.seed_graph import build_seed_extraction
+
+    pid = project["id"]
+    seed = build_seed_extraction()
+    neo4j_service.ingest(pid, seed)
+    g = neo4j_service.fetch_project_graph(pid)
+    names = {n["name"] for n in g["nodes"]}
+    assert {e.name for e in seed.entities} <= names  # 시드 노드 전부 반영
+    # 발령 임계값(정량 속성)이 경보단계 노드에 실제로 저장됐는지(정규화 유실 회귀 방지 포함)
+    관심 = next(n for n in g["nodes"] if n["name"] == "관심")
+    assert 관심["value"] == 1000
+    assert 관심["unit"] == "cells/mL"
+    assert 관심["comparator"] == ">="
+    대발생 = next(n for n in g["nodes"] if n["name"] == "대발생")
+    assert 대발생["value"] == 1_000_000
+
+
+def test_seed_is_idempotent(project):
+    from app import neo4j_service
+    from app.seed_graph import build_seed_extraction
+
+    pid = project["id"]
+    seed = build_seed_extraction()
+    neo4j_service.ingest(pid, seed)
+    g1 = neo4j_service.fetch_project_graph(pid)
+    neo4j_service.ingest(pid, seed)  # 재시드
+    g2 = neo4j_service.fetch_project_graph(pid)
+    assert len(g2["nodes"]) == len(g1["nodes"])  # 노드 수 불변(MERGE)
+    assert len(g2["links"]) == len(g1["links"])  # 관계 수 불변
+
+
+def test_seed_endpoint_and_user_merge(project):
+    from fastapi.testclient import TestClient
+
+    from app import neo4j_service
+    from app.main import app
+    from app.models import Entity, Extraction
+
+    client = TestClient(app)
+    pid = project["id"]
+    r = client.post(f"/api/projects/{pid}/seed")
+    assert r.status_code == 200, r.text
+    names = {n["name"] for n in r.json()["graph"]["nodes"]}
+    assert {"조류경보제", "대청호", "남조류세포수"} <= names
+    before = len(names)
+
+    # 사용자 입력이 시드 노드와 이름으로 병합된다(중복 노드 없이 설명만 갱신)
+    neo4j_service.ingest(pid, Extraction(entities=[Entity(name="대청호", description="현장 메모")]))
+    g = neo4j_service.fetch_project_graph(pid)
+    assert len(g["nodes"]) == before  # 새 노드 없음(병합)
+    대청호 = next(n for n in g["nodes"] if n["name"] == "대청호")
+    assert 대청호["description"] == "현장 메모"  # 비어있지 않은 설명으로 갱신
+    assert "저수지" in 대청호["types"]  # 시드가 부여한 타입 라벨 유지
+
+
 # ---- 읽기 경로(text-to-cypher): run_read_query 실행/격리/읽기전용 ----
 
 _NODE_QUERY = (

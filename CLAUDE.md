@@ -46,9 +46,11 @@ kinetic 동사·RAG→OAG·Disruption Bot·재사용 해자) → ③ **디지털
 다음(콘텐츠 로드맵): N16 근거·출처 레이어(provenance) → N17 인과·메커니즘 지식(독소·냄새물질·우점종·정수처리)
 → N18 예시질문·입력 템플릿·용어사전.
 
-> **git 상태(2026-08-05)**: **N1~N14 전부 main에 머지·push 완료**(`main`=`origin/main`=`809cf07`).
-> N14(온톨로지 설명 페이지)를 `feat-ontology-guide`에서 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
-> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서, PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-11)**: **N1~N14는 main**(`main`=`origin/main`=`809cf07`). **N15(표준 시드 온톨로지)는
+> 피처 브랜치 `feat-seed-ontology`에 커밋·push 완료**(구현 커밋 `a769780`) — **PR 미머지**. PR 생성 링크:
+> <https://github.com/2JUNSIK/ontology/pull/new/feat-seed-ontology>.
+> `gh` 미설치 → PR은 push 후 웹 링크로 연다. **머지 후 이 노트를 갱신하고 피처 브랜치를 로컬·원격 정리한다.**
+> (참조: 메모리 `git-feature-branch-workflow`)
 
 - **`PLAN.md`(v2)가 사양서(source of truth)다.** 작업 전 통독 — 아키텍처, 데이터 모델(§2),
   API(§5), 마일스톤(N1~N14, §10), "진행 현황"이 모두 여기 있다.
@@ -106,10 +108,15 @@ kinetic 동사·RAG→OAG·Disruption Bot·재사용 해자) → ③ **디지털
 
 ### 마일스톤마다 지키는 작업 방식 (사용자 상시 지시)
 코드 작성 후 **커밋 전에** 적대적 서브에이전트로 코드 검수 + 엣지케이스 테스트를 수행하고,
-must-fix를 반영한 뒤 커밋/푸시한다. 재사용 리뷰어는 `.claude/agents/ontology-reviewer.md`
-(다음 세션부터 `ontology-reviewer` 타입으로 호출 가능; 당세션 신규 생성 시엔 로드 안 됨 →
-범용 에이전트에 동일 지침으로 대체). 커밋 메시지 here-string에 **큰따옴표 금지**
-(PowerShell 5.1에서 인자 분할됨).
+must-fix를 반영한 뒤 **커밋 → push(피처 브랜치) → PR** 순으로 진행한다. **그리고 같은 마일스톤에서
+`PLAN.md`(§10 마일스톤·진행 현황·git 상태)와 `CLAUDE.md`(현재 상태·테스트 수·API 표·git 상태)를 함께
+갱신한다 — 문서 갱신까지가 마일스톤 '완료(Definition of Done)'다**(코드만 커밋하고 문서를 빼먹지 말 것).
+재사용 리뷰어는 `.claude/agents/ontology-reviewer.md`(다음 세션부터 `ontology-reviewer` 타입으로 호출 가능;
+당세션 신규 생성 시엔 로드 안 됨 → 범용 에이전트에 동일 지침으로 대체). 커밋 메시지 here-string에
+**큰따옴표 금지**(PowerShell 5.1에서 인자 분할됨).
+
+> **매 마일스톤 절차(요약)**: 구현 → 적대적 검수 + 엣지케이스 테스트 → must-fix 반영 → **커밋 →
+> push(피처 브랜치) → PR(웹 링크) → PLAN.md·CLAUDE.md 갱신**(+비자명한 규약이면 메모리).
 
 ## 사용자에게 먼저 알려야 할 것 (사전 경고 · 프로세스 가드레일)
 

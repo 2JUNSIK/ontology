@@ -55,9 +55,11 @@ K-water 수자원 도메인(특히 **녹조 관리 / 수질오염 대응**) 지�
 상태·행동 보강) → 수자원 트윈 확장 시나리오(대청호 녹조). 순수 프론트·과금 없음·tsc/build 통과.
 **다음: 프론트 디자인/기능 확장 계속.**
 
-> **git 상태(2026-08-05)**: **N1~N14 전부 main에 머지·push 완료**(`main`=`origin/main`=`809cf07`).
-> N14(온톨로지 설명 페이지)를 `feat-ontology-guide`에서 ff 머지한 뒤 그 피처 브랜치를 **로컬·원격 모두 삭제**. **현재 브랜치는 `main` 하나뿐.**
-> `gh` 미설치 → 다음 작업은 새 피처 브랜치에서 하고 PR은 push 후 반환된 웹 링크로 연다. (참조: 메모리 `git-feature-branch-workflow`)
+> **git 상태(2026-08-11)**: **N1~N14는 main**(`main`=`origin/main`=`809cf07`). **N15(표준 시드 온톨로지)는
+> 피처 브랜치 `feat-seed-ontology`에 커밋·push 완료**(구현 커밋 `a769780`) — **PR 미머지**. PR 생성 링크:
+> <https://github.com/2JUNSIK/ontology/pull/new/feat-seed-ontology>.
+> `gh` 미설치 → PR은 push 후 웹 링크로 연다. **머지 후 이 노트를 갱신하고 피처 브랜치를 로컬·원격 정리한다.**
+> (참조: 메모리 `git-feature-branch-workflow`)
 
 - **백엔드**: `models.py`(Entity/Relation/Extraction + `_clean_value`/`_clean_label_or_type`),
   `cypher_builder.py`(`build_entity_constraint`/`build_ingest_statements`, `ENTITY_BASE_LABEL`),
@@ -289,7 +291,8 @@ cd ..\frontend; npm install; npm run dev           # http://localhost:5173
   병행측정·마이크로시스틴 노드 추가, 팔당=광역상수원 표현). tsc/pytest 통과. *(후속 콘텐츠 로드맵: N16 근거·
   출처 레이어, N17 인과·메커니즘 지식, N18 예시질문·템플릿·용어사전.)*
 
-각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → 커밋.
+각 마일스톤: 코드 → 적대적 서브에이전트 검수 + 엣지케이스 테스트 → must-fix 반영 → **커밋 → push(피처
+브랜치) → PR → PLAN.md·CLAUDE.md 갱신**(문서 갱신까지가 마일스톤 '완료'다).
 
 ## 검증 (Verification)
 
